@@ -1,135 +1,91 @@
+// src/components/DescribeImage.jsx
+
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+import { useEffect } from "react";
 import { useExamStore } from "@/store";
 import Image from "next/image";
+
+// Import reusable hooks and constants
+import { useAudioRecorder } from "../hooks/useAudioRecorder";
+import { useSequentialTimer, PHASES } from "../hooks/useSequentialTimer";
+import RecordingStatusDisplay from "../hooks/RecordingStatusDisplay";
 
 export default function DescribeImage({
   imageUrl,
   prepSeconds = 30,
   recordSeconds = 40,
   questionId,
-  onNext,
 }) {
-  const userName = useExamStore((s) => s.userName);
-  const addAnswer = useExamStore((s) => s.addAnswer);
+  const setAnswerKey = useExamStore((s) => s.setAnswerKey);
+  const globalPhase = useExamStore((s) => s.setPhase);
 
-  const [phase, setPhase] = useState("prep");
-  const [prepLeft, setPrepLeft] = useState(prepSeconds);
-  const [recLeft, setRecLeft] = useState(recordSeconds);
-  const [error, setError] = useState("");
-  const [recordedUrl, setRecordedUrl] = useState("");
+  // --- 1. Audio Recorder Hook ---
+  const {
+    startRecording: startAudio,
+    stopRecording: stopAudio,
+    cleanupStream: cleanupAudio,
+    error: recorderError,
+  } = useAudioRecorder(setAnswerKey, recordSeconds);
 
-  const mediaRecorderRef = useRef(null);
-  const streamRef = useRef(null);
-  const chunksRef = useRef([]);
+  // --- 2. Sequential Timer Hook ---
+  
+  // We need to assign the hook to a variable first so we can access 'setPhase' inside the callbacks
+  const timerHook = useSequentialTimer(
+    prepSeconds,
+    0, 
+    recordSeconds,
+    questionId, 
 
-  // ---------------- PREPARATION TIMER ----------------
-  useEffect(() => {
-    if (phase !== "prep") return;
-    if (prepLeft <= 0) {
-      startRecording().catch((e) => {
-        setError(String(e));
-        setPhase("error");
-      });
-      return;
+    // onPrepEnd: Prep ends -> Start Recording
+    () => {
+      // 🔴 FIX: Explicitly tell the timer to switch phase
+      timerHook.setPhase(PHASES.RECORDING); 
+      startAudio();
+    },
+
+    // onMiddleEnd: Skipped
+    () => {},
+
+    // onRecordEnd: Recording ends -> Stop Recording
+    () => {
+      stopAudio();
+      // The timer hook usually handles setting FINISHED automatically when time runs out,
+      // but explicitly setting it here ensures safety if manual stop is triggered.
+      timerHook.setPhase(PHASES.FINISHED);
     }
-    const t = setTimeout(() => setPrepLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [phase, prepLeft]);
-
-  // ---------------- RECORDING TIMER ----------------
-  useEffect(() => {
-    if (phase !== "recording") return;
-    if (recLeft <= 0) {
-      stopRecording();
-      return;
-    }
-    const t = setTimeout(() => setRecLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [phase, recLeft]);
-
-  // Cleanup mic stream on unmount
-  useEffect(() => {
-    return () => cleanupStream();
-  }, []);
-
-  // ---------------- MICROPHONE LOGIC ----------------
-  async function startRecording() {
-    setError("");
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-
-      const mr = new MediaRecorder(stream);
-      mediaRecorderRef.current = mr;
-      chunksRef.current = [];
-
-      mr.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
-      };
-
-      mr.onstop = () => {
-        const blob = new Blob(chunksRef.current, {
-          type: mr.mimeType || "audio/webm",
-        });
-        const url = URL.createObjectURL(blob);
-        setRecordedUrl(url);
-
-        // DO NOT call onNext here — only save result
-        addAnswer({
-          type: "describe-image",
-          questionId,
-          user: userName,
-          audio: url,
-          timestamp: Date.now(),
-        });
-
-        setPhase("finished");
-        cleanupStream();
-      };
-
-      setPhase("recording");
-      setRecLeft(recordSeconds);
-      mr.start();
-    } catch (e) {
-      setError("Microphone access failed.");
-      setPhase("error");
-    }
-  }
-
-  function stopRecording() {
-    const mr = mediaRecorderRef.current;
-    if (mr && mr.state !== "inactive") {
-      mr.stop();
-    } else {
-      setPhase("finished");
-      cleanupStream();
-    }
-  }
-
-  function cleanupStream() {
-    try {
-      const s = streamRef.current;
-      if (s) s.getTracks().forEach((t) => t.stop());
-    } catch {}
-    streamRef.current = null;
-    mediaRecorderRef.current = null;
-  }
-
-  // ---------------- PROGRESS HELPERS ----------------
-  const prepProgress = Math.round(
-    ((prepSeconds - prepLeft) / prepSeconds) * 100
   );
-  const recProgress = Math.round(
-    ((recordSeconds - recLeft) / recordSeconds) * 100
-  );
+
+  // Destructure values from the hook instance
+  const {
+    phase,
+    prepLeft,
+    recLeft,
+    prepProgress,
+    recProgress,
+  } = timerHook;
+
+  // --- 3. Effects ---
+
+  useEffect(() => {
+    return () => cleanupAudio();
+  }, [cleanupAudio]);
+
+  // Global Phase Logic
+  useEffect(() => {
+    if (phase === PHASES.PREP || phase === PHASES.ACTIVE_MIDDLE) {
+      globalPhase("prep");
+    } else if (phase === PHASES.RECORDING) {
+      globalPhase("recording");
+    } else if (phase === PHASES.FINISHED || phase === PHASES.ERROR) {
+      globalPhase("finished");
+    }
+  }, [phase, globalPhase]);
+
+  const currentError = recorderError;
 
   // ---------------- UI ----------------
   return (
     <div className="space-y-4">
-      {/* IMAGE */}
       <div className="border rounded overflow-hidden shadow-sm flex justify-center bg-white">
         <Image
           src={imageUrl}
@@ -140,42 +96,14 @@ export default function DescribeImage({
         />
       </div>
 
-      {/* PREPARATION */}
-      {phase === "prep" && (
-        <div className="space-y-2">
-          <div className="font-medium text-gray-800">
-            Preparing… ({prepLeft}s)
-          </div>
-          <Progress value={prepProgress} />
-        </div>
-      )}
-
-      {/* RECORDING */}
-      {phase === "recording" && (
-        <div className="space-y-2">
-          <div className="font-medium text-gray-800">
-            Recording… ({recLeft}s)
-          </div>
-          <Progress value={recProgress} />
-        </div>
-      )}
-
-      {/* FINISHED */}
-      {phase === "finished" && (
-        <div className="text-gray-800 font-medium">Recording finished.</div>
-      )}
-
-      {/* ERROR */}
-      {phase === "error" && (
-        <div className="text-red-600 text-sm">{error}</div>
-      )}
-
-      {/* NEXT BUTTON (manual only!) */}
-      {/* <div className="pt-3 border-t flex justify-end">
-        <Button onClick={() => onNext?.()} className="bg-sky-600 text-white">
-          Next
-        </Button>
-      </div> */}
+      <RecordingStatusDisplay
+          phase={phase}
+          prepLeft={prepLeft}
+          recLeft={recLeft}
+          prepProgress={prepProgress}
+          recProgress={recProgress}
+          error={currentError}
+      />
     </div>
   );
 }
