@@ -2,13 +2,61 @@ import { create } from "zustand";
 
 export const useExamStore = create((set, get) => ({
   userName: "",
+  mockTestId: null,
   currentStep: "exam", // simple linear exam for now
   questionIndex: 0,
-  answers: [], // { type, data, meta }
+  nextQuestion: null,
+  sessionId: "",
+  baseUrl: "https://admin.abepte.accoladesweb.com/mocktest/",
+  // baseUrl: "http://192.168.29.96:8000/mocktest/",
+  answer: {
+    session_id: "",
+    question_name: "",
+    answer: {},
+    answer_audio: null,
+  },
+  phase: "prep",
+  isStopSignalSent: false, // <-- NEW STATE VARIABLE
 
+  // Set any top-level key of `answer`
+  setStopSignal: (value) => set({ isStopSignalSent: value }),
+  setAnswerKey: (key, value) =>
+    set((state) => ({
+      answer: {
+        ...state.answer,
+        [key]: value,
+      },
+    })),
+
+  // Update nested answer object { ... }
+  setInnerAnswer: (obj) =>
+    set((state) => ({
+      answer: {
+        ...state.answer,
+        answer: {
+          ...state.answer.answer,
+          ...obj, // merge new inner fields
+        },
+      },
+    })),
+
+  // Reset all fields (if needed)
+  resetAnswer: () =>
+    set(() => ({
+      answer: {
+        session_id: "",
+        question_name: "",
+        answer: {},
+        answer_audio: "",
+      },
+    })),
   setUserName: (name) => set({ userName: name.trim() }),
+  setPhase: (ph) => set({ phase: ph }),
+  setMockTestId: (id) => set({ mockTestId: id }),
   addAnswer: (answer) => set({ answers: [...get().answers, answer] }),
-  nextQuestion: () => set({ questionIndex: get().questionIndex + 1 }),
+  setNextQuestion: (question) => set({ nextQuestion: question }),
+  // nextQuestion: () => set({ questionIndex: get().questionIndex + 1 }),
+  setSessionId: (id) => set({ sessionId: id }),
   resetExam: () => set({ currentStep: "exam", questionIndex: 0, answers: [] }),
 }));
 
