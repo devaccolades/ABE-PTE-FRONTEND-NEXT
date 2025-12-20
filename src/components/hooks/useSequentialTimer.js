@@ -1,101 +1,102 @@
 // src/hooks/useSequentialTimer.js
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from 'react';
 
-// Use universal phase constants
 export const PHASES = {
-    PREP: "prep",
-    ACTIVE_MIDDLE: "activeMiddle", // Used for Playing OR Record Prep
-    RECORDING: "recording",
-    FINISHED: "finished",
-    ERROR: "error",
+  PREP: 'prep',
+  ACTIVE_MIDDLE: 'active_middle',
+  RECORDING: 'recording',
+  FINISHED: 'finished',
+  ERROR: 'error',
 };
 
-/**
- * Manages a flexible two- or three-stage sequential flow.
- *
- * @param {number} prepSeconds - Duration of the first (prep) phase.
- * @param {number} middleSeconds - Duration of the middle (media/recordPrep) phase. Set to 0 for a two-phase flow.
- * @param {number} recordSeconds - Duration of the final (recording) phase.
- * @param {any} resetKey - Dependency to trigger a full reset (e.g., questionId).
- * @param {function} onPrepEnd - Callback when PREP ends (triggers ACTIVE_MIDDLE/RECORDING start).
- * @param {function} onMiddleEnd - Callback when ACTIVE_MIDDLE ends (triggers RECORDING start).
- * @param {function} onRecordEnd - Callback when RECORDING ends (triggers recording stop).
- */
 export function useSequentialTimer(
-    prepSeconds,
-    middleSeconds,
-    recordSeconds,
-    resetKey,
-    onPrepEnd,
-    onMiddleEnd,
-    onRecordEnd
+  prepDuration,
+  middleDuration,
+  recDuration,
+  triggerReset,
+  onPrepEnd,
+  onMiddleEnd,
+  onRecordEnd
 ) {
-    const [phase, setPhase] = useState(PHASES.PREP);
-    const [prepLeft, setPrepLeft] = useState(prepSeconds);
-    const [middleLeft, setMiddleLeft] = useState(middleSeconds);
-    const [recLeft, setRecLeft] = useState(recordSeconds);
+  const [phase, setPhase] = useState(PHASES.PREP);
+  const [timeLeft, setTimeLeft] = useState(prepDuration);
+  
+  const phaseEndTimeRef = useRef(0);
+  const hasTriggeredEndRef = useRef(false);
 
-    const isMiddlePhaseActive = middleSeconds > 0;
+  // Helper to sync the absolute end time when a phase starts
+  const startPhaseTimer = (duration) => {
+    phaseEndTimeRef.current = Date.now() + duration * 1000;
+    setTimeLeft(duration);
+    hasTriggeredEndRef.current = false;
+  };
 
-    // --- State Reset ---
-    useEffect(() => {
-        setPhase(PHASES.PREP);
-        setPrepLeft(prepSeconds);
-        setMiddleLeft(middleSeconds);
-        setRecLeft(recordSeconds);
-    }, [resetKey, prepSeconds, middleSeconds, recordSeconds]);
+  // 1. Initialize/Reset
+  useEffect(() => {
+    setPhase(PHASES.PREP);
+    startPhaseTimer(prepDuration);
+  }, [triggerReset, prepDuration]);
 
-    // --- 1. Prep Countdown (PREP -> ACTIVE_MIDDLE or RECORDING) ---
-    useEffect(() => {
-        if (phase !== PHASES.PREP) return;
-        if (prepLeft <= 0) {
-            onPrepEnd(isMiddlePhaseActive);
-            // Phase transition handled by onPrepEnd callback
-            return;
+  // 2. The Timer Loop
+  useEffect(() => {
+    if (phase === PHASES.FINISHED || phase === PHASES.ERROR) return;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const msRemaining = phaseEndTimeRef.current - now;
+      const secondsRemaining = Math.ceil(msRemaining / 1000);
+
+      // Force UI update
+      const displayTime = secondsRemaining > 0 ? secondsRemaining : 0;
+      setTimeLeft(displayTime);
+
+      if (msRemaining <= 0 && !hasTriggeredEndRef.current) {
+        hasTriggeredEndRef.current = true;
+        
+        // Trigger the specific callbacks based on current phase
+        if (phase === PHASES.PREP) {
+          onPrepEnd(middleDuration > 0);
+        } else if (phase === PHASES.ACTIVE_MIDDLE) {
+          onMiddleEnd();
+        } else if (phase === PHASES.RECORDING) {
+          setPhase(PHASES.FINISHED);
+          onRecordEnd();
         }
-        const t = setTimeout(() => setPrepLeft((s) => s - 1), 1000);
-        return () => clearTimeout(t);
-    }, [phase, prepLeft, onPrepEnd, isMiddlePhaseActive]);
+      }
+    }, 50); 
 
-    // --- 2. Middle Countdown (ACTIVE_MIDDLE -> RECORDING) ---
-    useEffect(() => {
-        if (!isMiddlePhaseActive || phase !== PHASES.ACTIVE_MIDDLE) return;
-        if (middleLeft <= 0) {
-            setPhase(PHASES.RECORDING);
-            onMiddleEnd(); // Start recording
-            return;
-        }
-        const t = setTimeout(() => setMiddleLeft((s) => s - 1), 1000);
-        return () => clearTimeout(t);
-    }, [phase, middleLeft, onMiddleEnd, isMiddlePhaseActive]);
+    return () => clearInterval(interval);
+  }, [phase, middleDuration, onPrepEnd, onMiddleEnd, onRecordEnd]);
 
-    // --- 3. Recording Countdown (RECORDING -> FINISHED) ---
-    useEffect(() => {
-        if (phase !== PHASES.RECORDING) return;
-        if (recLeft <= 0) {
-            onRecordEnd(); // Stop recording
-            setPhase(PHASES.FINISHED);
-            return;
-        }
-        const t = setTimeout(() => setRecLeft((s) => s - 1), 1000);
-        return () => clearTimeout(t);
-    }, [phase, recLeft, onRecordEnd]);
+  // 3. Manual Phase Setter wrapper
+  const handleSetPhase = (newPhase) => {
+    // When the component calls setPhase(RECORDING), 
+    // we MUST immediately reset the timer anchor to the recording duration
+    if (newPhase === PHASES.RECORDING) {
+      startPhaseTimer(recDuration);
+    } else if (newPhase === PHASES.ACTIVE_MIDDLE) {
+      startPhaseTimer(middleDuration);
+    } else if (newPhase === PHASES.FINISHED) {
+      setTimeLeft(0);
+    }
+    setPhase(newPhase);
+  };
 
-    // --- Progress Calculations ---
-    const prepProgress = (prepSeconds > 0) ? ((prepSeconds - prepLeft) / prepSeconds) * 100 : 100;
-    const middleProgress = (middleSeconds > 0) ? ((middleSeconds - middleLeft) / middleSeconds) * 100 : 100;
-    const recProgress = (recordSeconds > 0) ? ((recordSeconds - recLeft) / recordSeconds) * 100 : 100;
+  const getProgress = (total, current) => {
+    if (total <= 0) return 0;
+    return Math.min(100, Math.max(0, ((total - current) / total) * 100));
+  };
 
-    return {
-        phase,
-        setPhase, // Exposed for I/O hooks to transition state (e.g., to ACTIVE_MIDDLE or ERROR)
-        prepLeft,
-        middleLeft,
-        recLeft,
-        prepProgress,
-        middleProgress,
-        recProgress,
-        isMiddlePhaseActive,
-    };
+  return {
+    phase, // Current state: 'prep', 'recording', etc.
+    setPhase: handleSetPhase,
+    timeLeft, 
+    prepLeft: phase === PHASES.PREP ? timeLeft : 0,
+    middleLeft: phase === PHASES.ACTIVE_MIDDLE ? timeLeft : 0,
+    recLeft: phase === PHASES.RECORDING ? timeLeft : 0,
+    prepProgress: phase === PHASES.PREP ? getProgress(prepDuration, timeLeft) : (phase === PHASES.PREP ? 0 : 100),
+    middleProgress: phase === PHASES.ACTIVE_MIDDLE ? getProgress(middleDuration, timeLeft) : 0,
+    recProgress: phase === PHASES.RECORDING ? getProgress(recDuration, timeLeft) : 0,
+  };
 }

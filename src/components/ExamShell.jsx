@@ -21,12 +21,13 @@ import AudioToMCQRadio from "./questions/AudioToMCQRadio";
 import AudioHighlightBox from "./questions/AudioHighlightBox";
 import AreyousureModal from "./modals/AreyousureModal";
 import next from "next";
+import NameGate from "./NameGate";
 
-export default function ExamShell() {
+export default function ExamShell({ mocktestList }) {
   const userName = useExamStore((s) => s.userName);
   const questionIndex = useExamStore((s) => s.questionIndex);
   // const nextQuestion = useExamStore((s) => s.nextQuestion);
-  const sessionId = useExamStore((s) => s.sessionId);
+  // const sessionId = useExamStore((s) => s.sessionId);
   const url = useExamStore((s) => s.baseUrl);
   const [currentQuestion, setCurrentQuestion] = useState(null);
   const setNextQuestion = useExamStore((s) => s.setNextQuestion);
@@ -37,52 +38,106 @@ export default function ExamShell() {
   const answer = useExamStore((state) => state.answer);
   const nextQuestionStore = useExamStore((s) => s.nextQuestion);
   const setPhase = useExamStore((s) => s.setPhase);
+  const questionSection = useExamStore((s) => s.questionSection);
+  const setQuestionSection = useExamStore((s) => s.setQuestionSection);
+  const setQuestionTimer = useExamStore((s) => s.setQuestionTimer);
+  const setRemainingTime = useExamStore((s) => s.setRemainingTime);
+  // const session_id = useExamStore((s) => s.sessionId);
+  const name = useExamStore((s) => s.userName);
+  const [rehydrated, setRehydrated] = useState(false);
+  const sessionId = useExamStore((s) => s.sessionId);
+  const setSessionId = useExamStore((s) => s.setSessionId);
+  // const [sessionId, setSessionId] = useState(null);
 
   const [loading, setLoading] = useState(true);
 
-  // useEffect(() => {
-  //   let mounted = true;
-  //   (async () => {
-  //     const start = Date.now();
-  //     const data = await apiClient.fetchExam();
-  //     const MIN_LOAD_MS = 500;
-  //     const elapsed = Date.now() - start;
-  //     const remaining = Math.max(0, MIN_LOAD_MS - elapsed);
-  //     setTimeout(() => {
-  //       if (!mounted) return;
-  //       setExam(data);
-  //       setLoading(false);
-  //     }, remaining);
-  //   })();
-  //   return () => {
-  //     mounted = false;
-  //   };
-  // }, []);
+  useEffect(() => {
+    const storedSession = localStorage.getItem("exam_session_id");
+
+    if (storedSession && !sessionId) {
+      setSessionId(storedSession);
+    }
+
+    setRehydrated(true);
+  }, []);
 
   useEffect(() => {
-    if (!sessionId) return;
-    console.log(sessionId, "session_id");
-    const fetchQuestions = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`${url}get-question/?session_id=${sessionId}`);
-        if (!res.ok) {
-          throw new Error("Failed to fetch questions");
-        }
-        const data = await res.json();
-        setCurrentQuestion(data.results[0]);
-        setNextQuestion(data.next);
-        setAnswerKey("session_id", sessionId);
-        setAnswerKey("question_name", data.results[0].name);
-        setLoading(false);
-        console.log("Fetched questions:", data);
-      } catch (error) {
-        console.error("Error fetching questions:", error);
-        setLoading(false);
-      }
-    };
-    fetchQuestions();
-  }, [sessionId]);
+    if (!rehydrated || !sessionId) return;
+
+    const resumeUrl = localStorage.getItem("next_question");
+
+    if (resumeUrl) {
+      // Resume EXACT question
+      fetchByUrl(resumeUrl);
+    } else {
+      // First-time exam start
+      fetchFirstQuestion();
+    }
+  }, [rehydrated, sessionId]);
+
+  const fetchFirstQuestion = async () => {
+    setLoading(true);
+    const res = await fetch(`${url}get-question/?session_id=${sessionId}`);
+    const data = await res.json();
+
+    applyQuestion(data);
+  };
+
+  const fetchByUrl = async (url) => {
+    setLoading(true);
+    const res = await fetch(url);
+    const data = await res.json();
+
+    applyQuestion(data);
+  };
+
+  const applyQuestion = (data) => {
+    const q = data.results[0];
+
+    setCurrentQuestion(q);
+    setNextQuestion(data.next);
+
+    localStorage.setItem("next_question", data.next);
+
+    setQuestionSection(q.mocktest_section.section_name);
+    setQuestionTimer(q.mocktest_section.total_duration);
+    setRemainingTime(q.mocktest_section.total_duration);
+
+    setAnswerKey("session_id", sessionId);
+    setAnswerKey("question_name", q.name);
+
+    setLoading(false);
+  };
+
+  // useEffect(() => {
+  //   if (!sessionId) return;
+  //   console.log(sessionId, "session_id");
+  //   const fetchQuestions = async () => {
+  //     setLoading(true);
+  //     try {
+  //       const res = await fetch(`${url}get-question/?session_id=${sessionId}`);
+  //       if (!res.ok) {
+  //         throw new Error("Failed to fetch questions");
+  //       }
+  //       const data = await res.json();
+  //       // console.log(data.results[0].mocktest_section.section_name);
+  //       setQuestionSection(data.results[0].mocktest_section.section_name);
+  //       setQuestionTimer(data.results[0].mocktest_section.total_duration);
+  //       setRemainingTime(data.results[0].mocktest_section.total_duration);
+  //       setCurrentQuestion(data.results[0]);
+  //       setNextQuestion(data.next);
+  //       localStorage.setItem("next_question", data.next);
+  //       setAnswerKey("session_id", sessionId);
+  //       setAnswerKey("question_name", data.results[0].name);
+  //       setLoading(false);
+  //       console.log("Fetched questions:", data);
+  //     } catch (error) {
+  //       console.error("Error fetching questions:", error);
+  //       setLoading(false);
+  //     }
+  //   };
+  //   fetchQuestions();
+  // }, [sessionId]);
 
   useEffect(() => {
     if (currentQuestion !== null) {
@@ -98,7 +153,8 @@ export default function ExamShell() {
   const onNext = () => {
     setPhase("prep");
     setCallAreYouSure(false);
-    handleModalNext();
+    // handleModalNext();
+    fetchByUrl(nextQuestionStore);
   };
 
   const handleNext = () => {
@@ -198,14 +254,17 @@ export default function ExamShell() {
       if (!res.ok) {
         throw new Error("Failed to fetch next question");
       }
-
       const data = await res.json();
+      if (data.results[0].mocktest_section.section_name !== questionSection) {
+        setQuestionSection(data.results[0].mocktest_section.section_name);
+        setQuestionTimer(data.results[0].mocktest_section.total_duration);
+        setRemainingTime(data.results[0].mocktest_section.total_duration);
+      }
       setCurrentQuestion(data.results[0]);
       setNextQuestion(data.next);
       setAnswerKey("session_id", sessionId);
       setAnswerKey("question_name", data.results[0].name);
       setLoading(false);
-
       console.log("Fetched next question:", data);
     } catch (error) {
       console.error("Error fetching next question:", error);
@@ -244,6 +303,10 @@ export default function ExamShell() {
   //   const q = sec?.questions?.[questionIndex];
   //   return q ?? null;
   // }, [exam, questionIndex]);
+
+  if (!name) {
+    return <NameGate mocktestList={mocktestList} />;
+  }
 
   if (loading) {
     return (
@@ -374,69 +437,90 @@ export default function ExamShell() {
             )}
 
           {/* re-telling lecture  */}
-          {currentQuestion.type === "Respond-to-a-Situation" && (
-            <RetellLecture
-              key={currentQuestion.id}
-              audioUrl={currentQuestion.audioUrl}
-              videoUrl={currentQuestion.videoUrl}
-              audioSum={currentQuestion.audioSum}
-              prepSeconds={currentQuestion.prepSeconds}
-              recordPrepSeconds={currentQuestion.recordPrep}
-              recordSeconds={currentQuestion.recordSeconds}
-              onNext={() => nextQuestion()}
-            />
-          )}
+          {currentQuestion !== null &&
+            currentQuestion?.subsection === "retell_lecture" && (
+              <RetellLecture
+                key={currentQuestion.id}
+                audioUrl={currentQuestion.audio}
+                // videoUrl={currentQuestion.videoUrl}
+                prepSeconds={currentQuestion.reading_time}
+                recordSeconds={currentQuestion.answering_time}
+                onNext={onNext}
+              />
+            )}
 
           {/* Answer Short Question */}
 
-          {currentQuestion.type === "Answer-Short-Question" && (
-            <RetellLecture
-              key={currentQuestion.id}
-              audioUrl={currentQuestion.audioUrl}
-              prepSeconds={currentQuestion.prepSeconds}
-              recordSeconds={currentQuestion.recordSeconds}
-              onNext={() => nextQuestion()}
-            />
-          )}
+          {currentQuestion !== null &&
+            currentQuestion?.subsection === "answer_short_question" && (
+              <RetellLecture
+                key={currentQuestion.id}
+                audioUrl={currentQuestion.audio}
+                prepSeconds={currentQuestion.reading_time}
+                recordSeconds={currentQuestion.answering_time}
+                subsection={currentQuestion.subsection}
+                onNext={onNext}
+              />
+            )}
 
-          {currentQuestion.type === "retell-lecture" && (
-            <RetellLecture
-              key={currentQuestion.id}
-              audioUrl={currentQuestion.audioUrl}
-              videoUrl={currentQuestion.videoUrl}
-              prepSeconds={currentQuestion.prepSeconds}
-              recordSeconds={currentQuestion.recordSeconds}
-              onNext={() => nextQuestion()}
-            />
-          )}
+          {currentQuestion !== null &&
+            currentQuestion?.subsection === "summarise_group_discussion" && (
+              <RetellLecture
+                key={currentQuestion.id}
+                audioUrl={currentQuestion.audio}
+                prepSeconds={currentQuestion.reading_time}
+                recordSeconds={currentQuestion.answering_time}
+                subsection={currentQuestion.subsection}
+                onNext={onNext}
+              />
+            )}
 
-          {currentQuestion.type === "Summarize-Written-Text" && (
-            <WriteEssay
-              key={currentQuestion.id}
-              promptText={currentQuestion.prompt}
-              durationSeconds={currentQuestion.durationSeconds}
-              onNext={() => nextQuestion()}
-            />
-          )}
+          {currentQuestion !== null &&
+            currentQuestion?.subsection === "respond_to_a_situation" && (
+              <RetellLecture
+                key={currentQuestion.id}
+                audioUrl={currentQuestion.audio}
+                prepSeconds={currentQuestion.reading_time}
+                recordSeconds={currentQuestion.answering_time}
+                subsection={currentQuestion.subsection}
+                onNext={onNext}
+              />
+            )}
 
-          {currentQuestion.type === "write-essay" && (
-            <WriteEssay
-              key={currentQuestion.id}
-              promptText={currentQuestion.prompt}
-              durationSeconds={currentQuestion.durationSeconds}
-              onNext={() => nextQuestion()}
-            />
-          )}
+          {/* writign section  */}
+          {currentQuestion !== null &&
+            currentQuestion?.subsection === "summarize_written_text" && (
+              <WriteEssay
+                questionId={currentQuestion.id}
+                key={currentQuestion.id}
+                promptText={currentQuestion.text}
+                durationSeconds={currentQuestion.reading_time}
+                onNext={onNext}
+              />
+            )}
 
-          {currentQuestion.type === "fill-blanks-dropdown" && (
-            <FillBlanksDropdown
-              key={currentQuestion.id}
-              segments={currentQuestion.segments}
-              blanks={currentQuestion.blanks}
-              durationSeconds={currentQuestion.durationSeconds}
-              onNext={() => nextQuestion()}
-            />
-          )}
+          {currentQuestion !== null &&
+            currentQuestion?.subsection === "write_essay" && (
+              <WriteEssay
+                questionId={currentQuestion.id}
+                key={currentQuestion.id}
+                promptText={currentQuestion.text}
+                durationSeconds={currentQuestion.reading_time}
+                onNext={onNext}
+              />
+            )}
+
+          {currentQuestion !== null &&
+            currentQuestion?.subsection === "fib_dropdown" && (
+              <FillBlanksDropdown
+                questionId={currentQuestion.id}
+                key={currentQuestion.id}
+                promptText={currentQuestion.text}
+                durationSeconds={currentQuestion.reading_time}
+                segments={currentQuestion.sub_questions}
+                onNext={onNext}
+              />
+            )}
 
           {currentQuestion.type === "mcq-multi" && (
             <MultipleChoiceMulti
