@@ -1,76 +1,86 @@
-// src/hooks/useRecordingTimer.js (or similar path)
+// src/hooks/useRecordingTimer.js
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from 'react';
 
-// Defines the component's state phases
 export const PHASES = {
-  PREP: "prep",
-  RECORDING: "recording",
-  FINISHED: "finished",
+  PREP: 'prep',
+  RECORDING: 'recording',
+  FINISHED: 'finished',
 };
 
-/**
- * Custom hook to manage the preparation and recording countdown phases.
- * * @param {number} prepSeconds - Total duration for the preparation phase.
- * @param {number} recordSeconds - Total duration for the recording phase.
- * @param {function} onPrepEnd - Callback to execute when prep phase ends (i.e., start recording).
- * @param {function} onRecordEnd - Callback to execute when recording phase ends (i.e., stop recording).
- * @param {any} resetKey - A dependency that triggers a state reset (e.g., promptText).
- * @returns {object} The current phase, remaining times, progress percentages, and setter functions.
- */
-export function useRecordingTimer(prepSeconds, recordSeconds, onPrepEnd, onRecordEnd, resetKey) {
+export function useRecordingTimer(
+  prepDuration,
+  recDuration,
+  onPrepEnd,
+  onRecordEnd,
+  triggerReset
+) {
   const [phase, setPhase] = useState(PHASES.PREP);
-  const [prepLeft, setPrepLeft] = useState(prepSeconds);
-  const [recLeft, setRecLeft] = useState(recordSeconds);
+  const [timeLeft, setTimeLeft] = useState(prepDuration);
+  
+  const phaseEndTimeRef = useRef(0);
+  const hasTriggeredEndRef = useRef(false);
 
-  // Effect to handle state reset when the question changes
+  // Updates the absolute timestamp for the countdown
+  const startPhaseTimer = (duration) => {
+    phaseEndTimeRef.current = Date.now() + duration * 1000;
+    setTimeLeft(duration);
+    hasTriggeredEndRef.current = false;
+  };
+
+  // Reset when question changes
   useEffect(() => {
     setPhase(PHASES.PREP);
-    setPrepLeft(prepSeconds);
-    setRecLeft(recordSeconds);
-  }, [resetKey, prepSeconds, recordSeconds]);
+    startPhaseTimer(prepDuration);
+  }, [triggerReset, prepDuration]);
 
-  // PREP countdown: automatically start recording when it reaches 0
+  // High-precision loop
   useEffect(() => {
-    if (phase !== PHASES.PREP) return;
-    if (prepLeft <= 0) {
-      setPhase(PHASES.RECORDING); // Transition to recording phase
-      if (typeof onPrepEnd === 'function') {
-        onPrepEnd(); // Execute the startRecording function passed from the component
-      }
-      return;
-    }
-    const t = setTimeout(() => setPrepLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [phase, prepLeft, onPrepEnd]);
+    if (phase === PHASES.FINISHED) return;
 
-  // RECORDING countdown: automatically stop when time is up
-  useEffect(() => {
-    if (phase !== PHASES.RECORDING) return;
-    if (recLeft <= 0) {
-      setPhase(PHASES.FINISHED); // Transition to finished phase
-      if (typeof onRecordEnd === 'function') {
-        onRecordEnd(); // Execute the stopRecording function passed from the component
-      }
-      return;
-    }
-    const t = setTimeout(() => setRecLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [phase, recLeft, onRecordEnd]);
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const msRemaining = phaseEndTimeRef.current - now;
+      const secondsRemaining = Math.ceil(msRemaining / 1000);
 
-  const prepProgress = Math.round(
-    ((prepSeconds - prepLeft) / Math.max(prepSeconds, 1)) * 100
-  );
-  const recProgress = Math.round(
-    ((recordSeconds - recLeft) / Math.max(recordSeconds, 1)) * 100
-  );
+      setTimeLeft(secondsRemaining > 0 ? secondsRemaining : 0);
+
+      if (msRemaining <= 0 && !hasTriggeredEndRef.current) {
+        hasTriggeredEndRef.current = true;
+        
+        if (phase === PHASES.PREP) {
+          // Notify component that prep is over
+          onPrepEnd(); 
+        } else if (phase === PHASES.RECORDING) {
+          setPhase(PHASES.FINISHED);
+          onRecordEnd();
+        }
+      }
+    }, 50);
+
+    return () => clearInterval(interval);
+  }, [phase, onPrepEnd, onRecordEnd]);
+
+  // Wrapper used by the component to trigger the RECORDING phase
+  const handleSetPhase = (newPhase) => {
+    if (newPhase === PHASES.RECORDING) {
+      startPhaseTimer(recDuration);
+    } else if (newPhase === PHASES.FINISHED) {
+      setTimeLeft(0);
+    }
+    setPhase(newPhase);
+  };
+
+  const getProgress = (total, current) => 
+    Math.min(100, Math.max(0, ((total - current) / total) * 100));
 
   return {
     phase,
-    setPhase, // Exposed setter for external control (like the stop signal)
-    prepLeft,
-    recLeft,
-    prepProgress,
-    recProgress,
+    setPhase: handleSetPhase,
+    timeLeft,
+    prepLeft: phase === PHASES.PREP ? timeLeft : 0,
+    recLeft: phase === PHASES.RECORDING ? timeLeft : 0,
+    prepProgress: phase === PHASES.PREP ? getProgress(prepDuration, timeLeft) : 100,
+    recProgress: phase === PHASES.RECORDING ? getProgress(recDuration, timeLeft) : 0,
   };
 }

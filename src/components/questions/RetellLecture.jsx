@@ -1,29 +1,44 @@
-// src/components/RetellLecture.jsx (Simplified and Reusable)
+// src/components/RetellLecture.jsx
 
 "use client";
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useMemo } from "react";
 import { Progress } from "@/components/ui/progress";
 import { useExamStore } from "@/store";
+
+// Hooks & Components
 import { useAudioRecorder } from "../hooks/useAudioRecorder";
 import { useMediaPlayback } from "../hooks/useMediaPlayback";
 import { useSequentialTimer, PHASES } from "../hooks/useSequentialTimer";
+import { useSectionTimer } from "../hooks/useSectionTimer";
+import SectionTimerDisplay from "../ui/SectionTimerDisplay";
 
 export default function RetellLecture({
   audioUrl,
   videoUrl,
   prepSeconds = 10,
-  // 1. SUGGESTION: Set recordPrepSeconds to 0 to remove the 5-second pause
-  recordPrepSeconds = 0, // <--- Set to 0
   recordSeconds = 40,
   questionId,
   audioSum,
+  subsection,
 }) {
   const setAnswerKey = useExamStore((s) => s.setAnswerKey);
   const globalPhase = useExamStore((s) => s.setPhase);
-  const isVideo = Boolean(videoUrl && videoUrl.trim().length > 0);
-  const mediaSrc = isVideo ? videoUrl : audioUrl;
 
-  // --- 1. I/O Hooks ---
+  // --- 1. Dynamic Prep Logic (10s for specific types) ---
+  const recordPrepSeconds = useMemo(() => {
+    const specialTypes = ["summarise_group_discussion", "respond_to_a_situation"];
+    return specialTypes.includes(subsection) ? 10 : 0;
+  }, [subsection]);
+
+  // --- 2. Section Timer ---
+  const handleSectionTimeExpired = useCallback(() => {
+    stopAudio();
+    if (pauseMedia) pauseMedia();
+  }, []);
+
+  const { formattedTime, isExpired: isSectionExpired } = useSectionTimer(handleSectionTimeExpired);
+
+  // --- 3. Audio Recorder ---
   const {
     startRecording: startAudio,
     stopRecording: stopAudio,
@@ -31,194 +46,176 @@ export default function RetellLecture({
     error: recorderError,
   } = useAudioRecorder(setAnswerKey, recordSeconds);
 
-  // Placeholder for setPhase, will be destructured from useSequentialTimer later
-  let setPhase;
-
-  // Media Playback End Handler: Transition flow (Playing -> Recording)
-  const handleMediaPlaybackEnd = useCallback(
-    (wasBlocked) => {
-      // 2. SUGGESTION: Transition from Playing/Prep to Recording
-      if (wasBlocked) {
-        // Media failed/blocked: Go straight to recording/start audio
-        setPhase(PHASES.RECORDING);
-        startAudio();
-      } else {
-        // Media finished successfully: Go straight to recording/start audio
-        setPhase(PHASES.RECORDING);
-        startAudio();
-      }
-    },
-    [setPhase, startAudio]
-  );
-
-  const {
-    mediaRef,
-    mediaProgress,
-    mediaTime,
-    startMediaPlayback,
-    formatTime,
-  } = useMediaPlayback(mediaSrc, handleMediaPlaybackEnd, (p) => setPhase(p));
-
-  // --- 2. Timer Hook Definition ---
+  // --- 4. High-Precision Sequential Timer ---
   const timerHook = useSequentialTimer(
     prepSeconds,
-    recordPrepSeconds, // Will be 0, skipping the middle phase countdown
+    recordPrepSeconds,
     recordSeconds,
-    questionId, // Reset key
-
-    // onPrepEnd: Prep ends -> Start Media/Recording
-    // (This is the critical transition point)
+    questionId,
+    // onPrepEnd: Initial Prep Done -> Play Media
     (hasMiddlePhase) => {
-      // Since hasMiddlePhase will be false (recordPrepSeconds = 0), this logic is cleaner:
+      if (isSectionExpired) return;
       if (mediaSrc) {
-        // Prep ends, start media. Successful playback will trigger handleMediaPlaybackEnd -> startAudio.
-        // We set the phase here to ACTIVE_MIDDLE to signify the start of the next process (Playing).
         startMediaPlayback(PHASES.ACTIVE_MIDDLE);
       } else {
-        // No media, skip straight to recording
-        timerHook.setPhase(PHASES.RECORDING);
-        startAudio();
+        // Fallback if no file exists
+        timerHook.setPhase(hasMiddlePhase ? PHASES.ACTIVE_MIDDLE : PHASES.RECORDING);
+        if (!hasMiddlePhase) startAudio();
       }
     },
-
-    // onMiddleEnd: Middle ends -> Start Recording (Skipped because recordPrepSeconds = 0)
+    // onMiddleEnd: 10s Prep Done -> Start Recording
     () => {
-      // This is here for compatibility but won't be called if middleSeconds=0
+      if (isSectionExpired) return;
       timerHook.setPhase(PHASES.RECORDING);
       startAudio();
     },
-
-    // onRecordEnd: Recording ends -> Stop Recording
-    () => {
-      stopAudio();
-      // The timer hook already sets PHASES.FINISHED
-    }
+    // onRecordEnd
+    () => stopAudio()
   );
 
-  // Destructure timer properties, including the actual setPhase
-  ({ setPhase } = timerHook);
   const {
     phase,
+    setPhase,
     prepLeft,
     middleLeft,
     recLeft,
     prepProgress,
     middleProgress,
     recProgress,
-    isMiddlePhaseActive,
   } = timerHook;
 
-  // --- 3. Effects ---
+  // --- 5. Media Playback Logic ---
+  const handleMediaPlaybackEnd = useCallback(
+    (wasBlocked) => {
+      if (isSectionExpired) return;
+      // After media ends, either go to 10s Prep or straight to Recording
+      if (wasBlocked || recordPrepSeconds === 0) {
+        setPhase(PHASES.RECORDING);
+        startAudio();
+      } else {
+        setPhase(PHASES.ACTIVE_MIDDLE);
+      }
+    },
+    [setPhase, startAudio, recordPrepSeconds, isSectionExpired]
+  );
+  
+  const isVideo = Boolean(videoUrl && videoUrl.trim().length > 0);
+  const mediaSrc = isVideo ? videoUrl : audioUrl;
+  const {
+    mediaRef,
+    mediaProgress,
+    mediaTime,
+    startMediaPlayback,
+    formatTime,
+    pauseMedia,
+  } = useMediaPlayback(mediaSrc, handleMediaPlaybackEnd, (p) => setPhase(p));
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      cleanupAudio();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
-  // 2. SUGGESTION: Update global phase state for the parent ExamShell
-  // The logic is: Next button disabled during Prep/Playing/Recording, enabled during Finished.
+  // --- 6. NEXT BUTTON & STYLE LOGIC ---
+  
+  const isMediaPlaying = phase === PHASES.ACTIVE_MIDDLE && mediaProgress < 100;
+  const isPostMediaPrep = phase === PHASES.ACTIVE_MIDDLE && mediaProgress >= 100;
+
   useEffect(() => {
-    // We want the parent modal to disable the Next button until recording is done.
-    if (phase === PHASES.PREP || phase === PHASES.ACTIVE_MIDDLE) {
-      // Set global phase to "prep" or "active" to keep the Next button disabled.
-      globalPhase("prep"); 
-    } else if (phase === PHASES.RECORDING) {
-      // Set global phase to "recording" to keep the Next button disabled.
-      globalPhase("recording");
-    } else if (phase === PHASES.FINISHED) {
-      // Set global phase to "finished" to enable the Next button.
-      globalPhase("finished");
-    } else if (phase === PHASES.ERROR) {
-       // Enable Next button if there's an error, allowing user to advance
-       globalPhase("finished"); 
+    // Logic: Enable "Next" button ONLY if recording has started or finished
+    if (isSectionExpired || phase === PHASES.RECORDING || phase === PHASES.FINISHED) {
+      globalPhase("finished"); // This ENABLES the Next button
+    } else {
+      globalPhase("active"); // This DISABLES the Next button
     }
-  }, [phase, globalPhase]);
+  }, [phase, globalPhase, isSectionExpired]);
 
-  const currentError = recorderError;
+  useEffect(() => {
+    if (isSectionExpired) {
+      pauseMedia();
+      stopAudio();
+      setPhase(PHASES.FINISHED);
+    }
+  }, [isSectionExpired, pauseMedia, stopAudio, setPhase]);
 
-  // --- UI Render ---
+  useEffect(() => {
+    return () => cleanupAudio();
+  }, [cleanupAudio]);
+
   return (
     <div className="space-y-6">
-      {currentError && (
-        <div className="text-red-600 text-sm">{currentError}</div>
-      )}
-      {audioSum && <h2>{audioSum}</h2>}
+      <div className="flex justify-between items-center border-b pb-4">
+        <h2 className="text-xl font-bold text-gray-800 uppercase">
+          {subsection?.replace(/_/g, " ")}
+        </h2>
+        <SectionTimerDisplay formattedTime={formattedTime} isExpired={isSectionExpired} />
+      </div>
 
-      {/* Media Element (Hidden) */}
+      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm min-h-[160px] flex flex-col justify-center">
+        {isSectionExpired ? (
+          <p className="text-red-600 text-center font-bold">Section Time Expired</p>
+        ) : (
+          <>
+            {/* 1. INITIAL PREP STYLE (Grey) */}
+            {phase === PHASES.PREP && (
+              <div className="space-y-3">
+                <div className="flex justify-between text-sm font-semibold text-gray-500">
+                  <span>Preparation</span>
+                  <span>{prepLeft}s</span>
+                </div>
+                <Progress value={prepProgress} className="h-2 bg-gray-100" />
+              </div>
+            )}
+
+            {/* 2. MEDIA PLAYING STYLE (Blue) */}
+            {isMediaPlaying && (
+              <div className="space-y-3">
+                <div className="flex justify-between text-sm font-semibold text-blue-600">
+                  <span>Playing Audio...</span>
+                  <span>{formatTime(mediaTime.current)} / {formatTime(mediaTime.total)}</span>
+                </div>
+                <Progress value={Math.round(mediaProgress)} className="h-2 bg-blue-50" />
+              </div>
+            )}
+
+            {/* 3. POST-MEDIA 10S PREP STYLE (Orange) */}
+            {isPostMediaPrep && (
+              <div className="space-y-3">
+                <div className="flex justify-between text-sm font-semibold text-orange-600">
+                  <span>Preparation (Post-Media)</span>
+                  <span>{middleLeft}s</span>
+                </div>
+                <Progress value={middleProgress} className="h-2 bg-orange-50" />
+              </div>
+            )}
+
+            {/* 4. RECORDING STYLE (Red) */}
+            {phase === PHASES.RECORDING && (
+              <div className="space-y-3">
+                <div className="flex justify-between text-sm font-semibold text-red-600">
+                  <span>🔴 Recording...</span>
+                  <span>{recLeft}s</span>
+                </div>
+                {/* Red recording bar */}
+                <div className="h-2 w-full bg-red-100 rounded-full overflow-hidden">
+                   <div 
+                    className="h-full bg-red-600 transition-all duration-300" 
+                    style={{ width: `${recProgress}%` }}
+                   />
+                </div>
+              </div>
+            )}
+
+            {/* 5. FINISHED STYLE */}
+            {phase === PHASES.FINISHED && (
+              <div className="text-center text-green-600 font-bold animate-in fade-in">
+                ✅ Completed. You may click Next.
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Hidden Audio/Video Elements */}
       {isVideo ? (
-        <video
-          ref={mediaRef}
-          src={videoUrl || ""}
-          style={{ display: "none" }}
-        />
+        <video ref={mediaRef} src={videoUrl} className="hidden" />
       ) : (
-        <audio
-          ref={mediaRef}
-          src={audioUrl || ""}
-          style={{ display: "none" }}
-        />
-      )}
-
-      {/* Display Logic - Unified PHASES */}
-
-      {/* Prep UI (PHASES.PREP) */}
-      {phase === PHASES.PREP && (
-        <div className="space-y-2">
-          <div className="font-medium text-gray-800">
-            **Preparing…** ({prepLeft}s)
-          </div>
-          <Progress value={prepProgress} />
-          <div className="text-xs text-gray-600">
-            Media will play automatically.
-          </div>
-        </div>
-      )}
-
-      {/* Active Middle UI (PHASES.ACTIVE_MIDDLE) - Used here only for "Playing Media" */}
-      {phase === PHASES.ACTIVE_MIDDLE && (
-        <div className="space-y-2">
-          <div className="font-medium text-gray-800">
-            **Playing media…**
-          </div>
-          <div className="text-xs text-gray-600">
-            {`${formatTime(mediaTime.current)} / ${formatTime(mediaTime.total)}`}
-          </div>
-          <Progress value={Math.round(mediaProgress)} />
-        </div>
-      )}
-
-      {/* Recording UI (PHASES.RECORDING) */}
-      {phase === PHASES.RECORDING && (
-        <div className="space-y-2">
-          <div className="font-medium text-gray-800">
-            🔴 **Recording…** ({recLeft}s)
-          </div>
-          <Progress value={recProgress} />
-          <div className="text-xs text-gray-600">
-            Your response is being recorded. It will stop automatically.
-          </div>
-        </div>
-      )}
-
-      {/* Finished UI (PHASES.FINISHED) */}
-      {phase === PHASES.FINISHED && (
-        <div className="space-y-2">
-          <div className="font-medium text-gray-800">
-            ✅ **Recording finished.** Click Next to proceed.
-          </div>
-        </div>
-      )}
-
-      {/* Error UI (PHASES.ERROR) */}
-      {phase === PHASES.ERROR && (
-        <div className="space-y-2">
-          <div className="font-medium text-red-600">
-            ❌ **An unexpected error occurred.**
-          </div>
-        </div>
+        <audio ref={mediaRef} src={audioUrl} className="hidden" />
       )}
     </div>
   );

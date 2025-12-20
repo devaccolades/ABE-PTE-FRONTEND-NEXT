@@ -14,7 +14,12 @@ export default function NameGate({ mocktestList }) {
   const [test, setTest] = useState(null);
   const [selectedTest, setSelectedTest] = useState(null);
   const canContinue = name.trim().length >= 2 && selectedTest;
-  0;
+  const [session, setSession] = useState(null);
+
+  function onSessionCreated(sessionId) {
+    setSession(sessionId);
+    localStorage.setItem("exam_session_id", sessionId);
+  }
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
@@ -83,6 +88,7 @@ export default function NameGate({ mocktestList }) {
       }
 
       const responseData = await res.json();
+      onSessionCreated(responseData.session_id);
       console.log("success", responseData.session_id);
       setSessioId(responseData.session_id);
     } catch (error) {
