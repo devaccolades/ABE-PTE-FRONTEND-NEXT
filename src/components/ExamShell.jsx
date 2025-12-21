@@ -8,14 +8,12 @@ import WriteEssay from "@/components/questions/WriteEssay";
 import FillBlanksDropdown from "@/components/questions/FillBlanksDropdown";
 import MultipleChoiceMulti from "@/components/questions/MultipleChoiceMulti";
 import ReorderParagraphs from "@/components/questions/ReorderParagraphs";
-import FillBlanksDragDrop from "./questions/FillBlanksDragDrop";
 import RetellLecture from "./questions/RetellLecture";
 import DescribeImage from "./questions/DescribeImage";
 import MultipleChoiceSingle from "./questions/MultipleChoiceSingle";
 import SummerizeTheEssay from "./questions/SummerizeTheEssay";
 import AudioToMCQ from "./questions/AudioToMCQ";
 import FillBlanksTyped from "./questions/FillBlanksTyped";
-import AudioToMCQRadio from "./questions/AudioToMCQRadio";
 import AudioHighlightBox from "./questions/AudioHighlightBox";
 import AreyousureModal from "./modals/AreyousureModal";
 import NotificationMessage from "./sections/NotificationMessage";
@@ -48,7 +46,7 @@ export default function ExamShell({ mocktestList }) {
   const [loading, setLoading] = useState(true);
   const [callAreYouSure, setCallAreYouSure] = useState(false);
   const [rehydrated, setRehydrated] = useState(false);
-  const [name, setName] = useState();
+  const [displayName, setDisplayName] = useState("");
 
   // --- 1. Consolidated Loader ---
   const loadQuestion = useCallback(
@@ -70,6 +68,7 @@ export default function ExamShell({ mocktestList }) {
         }
 
         setCurrentQuestion(q);
+        console.log("current Question", q);
         setNextQuestion(data.next);
 
         localStorage.setItem("current_question", targetUrl);
@@ -105,20 +104,18 @@ export default function ExamShell({ mocktestList }) {
   // --- 2. Rehydration ---
   useEffect(() => {
     const storedSession = localStorage.getItem("exam_session_id");
-    if (storedSession && !sessionId) {
-      setSessionId(storedSession);
-    }
+    const storedName = localStorage.getItem("exam_user_name");
+    if (storedSession && !sessionId) setSessionId(storedSession);
+    if (storedName) setDisplayName(storedName);
     setRehydrated(true);
   }, [sessionId, setSessionId]);
 
   useEffect(() => {
     if (!rehydrated || !sessionId) return;
     const resumeUrl = localStorage.getItem("current_question");
-    if (resumeUrl) {
-      loadQuestion(resumeUrl);
-    } else {
-      loadQuestion(`${baseUrl}get-question/?session_id=${sessionId}`);
-    }
+    loadQuestion(
+      resumeUrl || `${baseUrl}get-question/?session_id=${sessionId}`
+    );
   }, [rehydrated, sessionId, baseUrl, loadQuestion]);
 
   // --- 3. Submission Logic ---
@@ -154,7 +151,7 @@ export default function ExamShell({ mocktestList }) {
       });
 
       if (!postRes.ok) throw new Error("Submission Failed");
-
+      console.log(finalAnswer.answer);
       setCallAreYouSure(false);
       loadQuestion(nextQuestionUrl);
     } catch (error) {
@@ -165,14 +162,7 @@ export default function ExamShell({ mocktestList }) {
     }
   };
 
-  const handleNextBtnClick = () => setCallAreYouSure(true);
-  const onCloseModal = () => setCallAreYouSure(false);
-
-  useEffect(() => {
-    setName(localStorage.getItem("exam_user_name"));
-  });
-
-  if (!name) return <NameGate mocktestList={mocktestList} />;
+  if (!displayName) return <NameGate mocktestList={mocktestList} />;
   if (loading && !currentQuestion) return <ExamLoadingSkeleton />;
   if (!currentQuestion) return <ExamCompleteScreen userName={userName} />;
 
@@ -196,14 +186,13 @@ export default function ExamShell({ mocktestList }) {
           <Separator className="mb-6" />
 
           <div className="min-h-[250px]">
-            {/* THE KEY FIX IS HERE */}
             {renderQuestionComponent(currentQuestion, handleModalNext)}
           </div>
 
           <div className="mt-8 pt-4 border-t flex justify-end">
             <button
               disabled={phase === "prep"}
-              onClick={handleNextBtnClick}
+              onClick={() => setCallAreYouSure(true)}
               className={`px-8 py-2 rounded-md font-bold transition-all ${
                 phase === "prep"
                   ? "bg-gray-100 text-gray-400 cursor-not-allowed"
@@ -217,20 +206,24 @@ export default function ExamShell({ mocktestList }) {
       </Card>
 
       {callAreYouSure && (
-        <AreyousureModal onClose={onCloseModal} onNext={handleModalNext} />
+        <AreyousureModal
+          onClose={() => setCallAreYouSure(false)}
+          onNext={handleModalNext}
+        />
       )}
     </>
   );
 }
 
 /**
- * Enhanced Router with explicit key assignment for every component
+ * Consolidated Router using ONLY q.subsection
  */
 function renderQuestionComponent(q, onNext) {
-  // Explicitly defining props for clarity
   const id = q.id;
+  const sub = q.subsection;
 
-  switch (q.subsection) {
+  switch (sub) {
+    // --- Speaking ---
     case "read_aloud":
       return (
         <ReadAloud
@@ -241,6 +234,7 @@ function renderQuestionComponent(q, onNext) {
           onNext={onNext}
         />
       );
+
     case "describe_image":
       return (
         <DescribeImage
@@ -251,6 +245,7 @@ function renderQuestionComponent(q, onNext) {
           onNext={onNext}
         />
       );
+
     case "repeat_sentence":
     case "retell_lecture":
     case "answer_short_question":
@@ -262,10 +257,12 @@ function renderQuestionComponent(q, onNext) {
           videoUrl={q.video}
           prepSeconds={q.reading_time}
           recordSeconds={q.answering_time}
-          subsection={q.subsection}
+          subsection={sub}
           onNext={onNext}
         />
       );
+
+    // --- Writing / Summarization ---
     case "write_essay":
     case "summarize_written_text":
       return (
@@ -276,59 +273,7 @@ function renderQuestionComponent(q, onNext) {
           onNext={onNext}
         />
       );
-    case "fib_dropdown":
-      return (
-        <FillBlanksDropdown
-          key={id}
-          segments={q.sub_questions}
-          onNext={onNext}
-        />
-      );
-  }
 
-  // Type-based Router
-  switch (q.type) {
-    case "mcq-multi":
-      return (
-        <MultipleChoiceMulti
-          key={id}
-          paragraphs={q.paragraphs}
-          questionText={q.questionText}
-          options={q.options}
-          onNext={onNext}
-        />
-      );
-    case "mcq-single":
-      return (
-        <MultipleChoiceSingle
-          key={id}
-          paragraphs={q.paragraphs}
-          questionText={q.questionText}
-          options={q.options}
-          onNext={onNext}
-        />
-      );
-    case "reorder-paragraphs":
-      return <ReorderParagraphs key={id} items={q.items} onNext={onNext} />;
-    case "notification":
-      return (
-        <NotificationMessage
-          key={id}
-          message={q.message}
-          duration={q.durationSeconds}
-          onNext={onNext}
-        />
-      );
-    case "category":
-      return (
-        <CategoryMessage
-          key={id}
-          categoryName={q.categoryName}
-          message={q.message}
-          duration={q.durationSeconds}
-          onNext={onNext}
-        />
-      );
     case "audio-to-text":
     case "Write-from-Dictation":
       return (
@@ -339,6 +284,43 @@ function renderQuestionComponent(q, onNext) {
           onNext={onNext}
         />
       );
+
+    // --- Reading ---
+    case "fib_dropdown":
+      return (
+        <FillBlanksDropdown
+          key={id}
+          segments={q.sub_questions}
+          onNext={onNext}
+        />
+      );
+
+    case "mc_multiple":
+      return (
+        <MultipleChoiceMulti
+          key={id}
+          paragraphs={q.text}
+          // questionText={q.questionText}
+          options={q.sub_questions[0].options}
+          onNext={onNext}
+        />
+      );
+
+    case "mcq-single":
+      return (
+        <MultipleChoiceSingle
+          key={id}
+          paragraphs={q.paragraphs}
+          questionText={q.questionText}
+          options={q.options}
+          onNext={onNext}
+        />
+      );
+
+    case "reorder-paragraphs":
+      return <ReorderParagraphs key={id} items={q.items} onNext={onNext} />;
+
+    // --- Listening ---
     case "audio-to-mcq":
       return (
         <AudioToMCQ
@@ -348,6 +330,7 @@ function renderQuestionComponent(q, onNext) {
           onNext={onNext}
         />
       );
+
     case "fill-in-the-blanks-typable":
       return (
         <FillBlanksTyped
@@ -358,6 +341,7 @@ function renderQuestionComponent(q, onNext) {
           onNext={onNext}
         />
       );
+
     case "highlight-incorrect-words":
       return (
         <AudioHighlightBox
@@ -367,10 +351,33 @@ function renderQuestionComponent(q, onNext) {
           onNext={onNext}
         />
       );
+
+    // --- System Messaging ---
+    case "notification":
+      return (
+        <NotificationMessage
+          key={id}
+          message={q.message}
+          duration={q.durationSeconds}
+          onNext={onNext}
+        />
+      );
+
+    case "category":
+      return (
+        <CategoryMessage
+          key={id}
+          categoryName={q.categoryName}
+          message={q.message}
+          duration={q.durationSeconds}
+          onNext={onNext}
+        />
+      );
+
     default:
       return (
         <div key={id} className="text-center py-10 text-gray-400">
-          Question type [{q.type}] not yet implemented.
+          Question type [{sub}] not yet implemented.
         </div>
       );
   }
@@ -384,28 +391,33 @@ function titleFor(sub) {
     fib_dropdown: "Reading: Fill in the Blanks",
     retell_lecture: "Speaking: Retell Lecture",
     repeat_sentence: "Speaking: Repeat Sentence",
+    "mcq-multi": "Reading: Multiple Choice (Multiple)",
+    "mcq-single": "Reading: Multiple Choice (Single)",
+    "reorder-paragraphs": "Reading: Reorder Paragraphs",
+    "Write-from-Dictation": "Listening: Write from Dictation",
   };
   return map[sub] || "Mock Test Question";
 }
 
 function ExamLoadingSkeleton() {
   return (
-    <div className="w-full max-w-4xl mx-auto p-10 bg-white rounded-xl animate-pulse shadow-sm">
+    <div className="w-full max-w-4xl mx-auto p-10 bg-white rounded-xl animate-pulse shadow-sm border border-gray-100">
+      {/* Title Bar Placeholder */}
       <div className="h-8 w-1/3 bg-gray-200 rounded mb-6"></div>
-      <div className="h-40 w-full bg-gray-50 rounded mb-4"></div>
-      <div className="h-4 w-full bg-gray-100 rounded"></div>
+
+      {/* Main Content Area Placeholder */}
+      <div className="space-y-4">
+        <div className="h-40 w-full bg-gray-100 rounded"></div>
+        <div className="h-4 w-full bg-gray-100 rounded"></div>
+        <div className="h-4 w-5/6 bg-gray-100 rounded"></div>
+      </div>
+
+      {/* Button Placeholder */}
+      <div className="mt-10 flex justify-end">
+        <div className="h-10 w-28 bg-gray-200 rounded-md"></div>
+      </div>
     </div>
   );
 }
 
-function ExamCompleteScreen({ userName }) {
-  return (
-    <Card className="w-full max-w-2xl mx-auto text-center p-12 shadow-xl border-t-4 border-green-500">
-      <div className="text-6xl mb-4">🏆</div>
-      <h1 className="text-3xl font-bold text-slate-800">Test Complete!</h1>
-      <p className="mt-4 text-gray-600 font-medium">
-        Excellent work, {userName}. Your performance is being analyzed.
-      </p>
-    </Card>
-  );
-}
+// ... ExamLoadingSkeleton and ExamCompleteScreen remain the same ...

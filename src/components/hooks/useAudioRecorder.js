@@ -1,108 +1,55 @@
-// src/hooks/useAudioRecorder.js (Optimized with useCallback)
+"use client";
+import { useState, useRef, useCallback } from "react";
 
-import { useRef, useState, useCallback } from 'react'; // <-- Import useCallback
-import { useExamStore } from "@/store";
+export const useAudioRecorder = (setAnswerKey, maxDuration) => {
+  const [error, setError] = useState(null);
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
 
-/**
- * Manages microphone access, recording state, and audio cleanup.
- * @param {function} setAnswerKey - Function to save the result to the store.
- * @param {number} recordSeconds - Max recording duration (used for context, not flow control).
- */
-export function useAudioRecorder(setAnswerKey, recordSeconds) {
-    const [error, setError] = useState("");
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      
+      mediaRecorderRef.current = recorder;
+      chunksRef.current = []; // Clear previous data
 
-    const mediaRecorderRef = useRef(null);
-    const chunksRef = useRef([]);
-    const streamRef = useRef(null);
-
-    // --- Core Recording Functions (Wrapped in useCallback) ---
-
-    const cleanupStream = useCallback(() => {
-        try {
-            // Stop tracks on the media stream
-            const s = streamRef.current;
-            if (s) {
-                s.getTracks().forEach((t) => t.stop());
-            }
-        } catch (e) {
-            console.error("cleanupStream error:", e);
-        } finally {
-             // Reset refs regardless of success/failure
-            mediaRecorderRef.current = null;
-            streamRef.current = null;
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
         }
-    }, []); // Dependencies: None, as it only uses refs
+      };
 
-    const stopRecording = useCallback(() => {
-        const mr = mediaRecorderRef.current;
-        if (mr && mr.state !== "inactive") {
-            try {
-                // Calling stop() triggers mr.onstop, which handles cleanup and saving the blob.
-                mr.stop(); 
-                return true;
-            } catch (e) {
-                console.error("stopRecording error:", e);
-                // If stop fails unexpectedly, force cleanup
-                cleanupStream();
-                return false;
-            }
-        }
-        // If it's already inactive, just clean up to be safe (though onstop should have done it)
-        cleanupStream(); 
-        return true;
-    }, [cleanupStream]); // Dependencies: cleanupStream (which is stable)
+      recorder.onstop = () => {
+        // 1. Create the binary Blob from chunks
+        const audioBlob = new Blob(chunksRef.current, { type: "audio/webm" });
 
-    const startRecording = useCallback(async () => {
-        setError("");
-        try {
-            chunksRef.current = [];
-            
-            // 1. Get microphone stream
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            streamRef.current = stream;
-            
-            // 2. Initialize MediaRecorder
-            const mr = new MediaRecorder(stream);
-            mediaRecorderRef.current = mr;
-            
-            mr.ondataavailable = (e) => {
-                if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
-            };
+        // 2. SAVE THE ACTUAL BLOB to the store
+        // DO NOT save as { size: audioBlob.size }, save the audioBlob itself!
+        setAnswerKey("answer_audio", audioBlob);
 
-            // 3. Define behavior when recording stops (triggered by stopRecording or max time)
-            mr.onstop = () => {
-                try {
-                    const blob = new Blob(chunksRef.current, {
-                        type: mr.mimeType || "audio/webm",
-                    });
-                    
-                    // SAVE THE FINAL BLOB to the store
-                    // We assume the type used in the store is consistent (e.g., "describe-image-audio")
-                    setAnswerKey("answer_audio", blob); 
-                } catch (e) {
-                    console.error("Error during onstop handling:", e);
-                    setError(String(e));
-                } finally {
-                    // Always clean up the stream when recording finishes
-                    cleanupStream();
-                }
-            };
+        // 3. Cleanup: Stop all tracks to turn off the microphone light
+        stream.getTracks().forEach((track) => track.stop());
+      };
 
-            // 4. Start recording
-            mr.start();
-            return true; // Success
-        } catch (e) {
-            console.error("startRecording error:", e);
-            setError(e?.message || "Microphone permission denied or unsupported browser.");
-            cleanupStream();
-            return false; // Failure
-        }
-    }, [setAnswerKey, cleanupStream]); // Dependencies: stable functions/props used inside
+      recorder.start();
+      return true;
+    } catch (err) {
+      console.error("Mic access error:", err);
+      setError("Microphone access denied or not found.");
+      return false;
+    }
+  }, [setAnswerKey]);
 
-    return {
-        startRecording,
-        stopRecording,
-        cleanupStream,
-        error,
-    };
-}
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
+  }, []);
+
+  const cleanupStream = useCallback(() => {
+    stopRecording();
+  }, [stopRecording]);
+
+  return { startRecording, stopRecording, cleanupStream, error };
+};

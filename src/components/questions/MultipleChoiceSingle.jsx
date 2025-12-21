@@ -12,7 +12,7 @@ import { Progress } from "@/components/ui/progress";
 export default function MultipleChoiceSingle({
   paragraphs = [],
   questionText = "Which one is correct?",
-  options = [],
+  options,
   durationSeconds = 0,
   onNext,
   allowDeselect = false,

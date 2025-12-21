@@ -5,7 +5,7 @@ import { Progress } from "@/components/ui/progress";
 
 export default function MultipleChoiceMulti({
   paragraphs = [],
-  questionText = "Which of the following statements are true?",
+  // questionText = "Which of the following statements are true?",
   options = [],
   durationSeconds = 0,
   onNext,
@@ -14,6 +14,11 @@ export default function MultipleChoiceMulti({
   const [left, setLeft] = useState(durationSeconds);
 
   const hasTimer = durationSeconds && durationSeconds > 0;
+
+  useEffect(() => {
+    console.log("paragraphs", paragraphs);
+    console.log("options", options);
+  }, []);
 
   useEffect(() => {
     if (!hasTimer) return;
@@ -42,16 +47,16 @@ export default function MultipleChoiceMulti({
         </div>
       )}
 
-      <div className="rounded-lg border border-gray-200 p-6 bg-gray-50 text-gray-900 leading-relaxed space-y-3">
+      {/* <div className="rounded-lg border border-gray-200 p-6 bg-gray-50 text-gray-900 leading-relaxed space-y-3">
         {paragraphs.map((p, i) => (
           <p key={`p-${i}`} className="text-base">
             {p}
           </p>
         ))}
-      </div>
+      </div> */}
 
       <div className="space-y-3">
-        <div className="text-sm font-medium text-gray-800">{questionText}</div>
+        {/* <div className="text-sm font-medium text-gray-800">{questionText}</div> */}
         <div className="grid gap-2">
           {options.map((opt, i) => (
             <label
