@@ -7,7 +7,13 @@ export default async function Home() {
   const res = await getMocktestList();
   const mocktestList = res.data;
 
-  return <HomeWrapper mocktestList={mocktestList} />;
+  return (
+    <main className="min-h-dvh bg-gradient-to-b from-sky-50 to-white text-gray-900">
+      <div className="container mx-auto max-w-4xl p-6 min-h-dvh flex items-center justify-center">
+        <ExamShell mocktestList={mocktestList} />
+      </div>
+    </main>
+  );
 }
 
 async function getMocktestList() {
