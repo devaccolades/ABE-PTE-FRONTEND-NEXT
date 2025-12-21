@@ -23,22 +23,27 @@ export const useExamStore = create((set, get) => ({
 
   // Set any top-level key of `answer`
   setStopSignal: (value) => set({ isStopSignalSent: value }),
-  setAnswerKey: (key, value) =>
+  // Inside your create() function
+  setAnswerKey: (questionId, data) =>
     set((state) => ({
       answer: {
         ...state.answer,
-        [key]: value,
+        // We target the nested 'answer' object specifically
+        answer: {
+          ...state.answer.answer,
+          [questionId]: data, // This puts "9": { ... } inside the correct object
+        },
       },
     })),
 
-  // Update nested answer object { ... }
+  // You can keep this for merging multiple fields at once if needed
   setInnerAnswer: (obj) =>
     set((state) => ({
       answer: {
         ...state.answer,
         answer: {
           ...state.answer.answer,
-          ...obj, // merge new inner fields
+          ...obj,
         },
       },
     })),
