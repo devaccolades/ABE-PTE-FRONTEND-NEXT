@@ -1,5 +1,3 @@
-// src/components/ReadAloud.jsx
-
 "use client";
 import { useEffect, useCallback } from "react";
 import { useExamStore } from "@/store";
@@ -25,6 +23,7 @@ export default function ReadAloud({
   const setStopSignal = useExamStore((s) => s.setStopSignal);
 
   // --- 1. Audio Recorder ---
+  // Pass setAnswerKey to save the blob to "answer_audio"
   const {
     startRecording: startAudio,
     stopRecording: stopAudio,
@@ -32,106 +31,83 @@ export default function ReadAloud({
     error: recorderError,
   } = useAudioRecorder(setAnswerKey, recordSeconds);
 
-  // --- 2. Section Timer (Global) ---
+  // --- 2. Initial Data Setup ---
+  useEffect(() => {
+    // Ensure the 'answer' text field is an empty string for audio-only tasks
+    setAnswerKey("answer", ""); 
+    // Initialize audio as null until recording finishes
+    setAnswerKey("answer_audio", null); 
+  }, [setAnswerKey, promptText]);
+
+  // --- 3. Section Timer ---
   const handleSectionTimeExpired = useCallback(() => {
     stopAudio();
-    // Logic for ending the whole section is handled via isExpired effect below
   }, [stopAudio]);
 
   const { formattedTime, isExpired: isSectionExpired } = useSectionTimer(handleSectionTimeExpired);
 
-  // --- 3. Local Question Timer (Delta-Time Logic) ---
+  // --- 4. Recording Timer Logic ---
   const timerHook = useRecordingTimer(
     prepSeconds,
     recordSeconds,
-    // onPrepEnd
     async () => {
       if (isSectionExpired) return;
-
-      // Update UI to Recording Phase immediately
       timerHook.setPhase(PHASES.RECORDING);
-
-      // Trigger actual hardware recording
       const success = await startAudio();
-      if (!success) {
-        timerHook.setPhase(PHASES.FINISHED);
-      }
+      if (!success) timerHook.setPhase(PHASES.FINISHED);
     },
-    // onRecordEnd
     () => {
       stopAudio();
       timerHook.setPhase(PHASES.FINISHED);
     },
-    promptText // Trigger reset when text changes
+    promptText
   );
 
-  const {
-    phase,
-    prepLeft,
-    recLeft,
-    prepProgress,
-    recProgress,
-  } = timerHook;
+  const { phase, prepLeft, recLeft, prepProgress, recProgress } = timerHook;
 
-  // --- 4. Effects for State Sync ---
+  // --- 5. Effects for Sync ---
 
-  // Handle Section Expiration
+  // Handle Stop Signal (from Next button)
   useEffect(() => {
-    if (isSectionExpired) {
-      stopAudio();
-      timerHook.setPhase(PHASES.FINISHED);
-    }
-  }, [isSectionExpired, stopAudio]);
-
-  // Handle External Next/Stop Signal
-  useEffect(() => {
-    if (isStopSignalSent && phase === PHASES.RECORDING) {
-      stopAudio();
+    if (isStopSignalSent) {
+      if (phase === PHASES.RECORDING) {
+        stopAudio();
+      }
       timerHook.setPhase(PHASES.FINISHED);
       setStopSignal(false);
     }
-  }, [isStopSignalSent, phase, stopAudio, setStopSignal]);
+  }, [isStopSignalSent, phase, stopAudio, setStopSignal, timerHook]);
 
-  // Sync with Global Store Phase (enables/disables Next button)
+  // Sync Global Phase
   useEffect(() => {
-    if (isSectionExpired) {
-      globalPhase(PHASES.FINISHED);
-    } else {
-      globalPhase(phase);
-    }
+    const currentPhase = isSectionExpired ? PHASES.FINISHED : phase;
+    globalPhase(currentPhase);
   }, [phase, globalPhase, isSectionExpired]);
 
-  // Cleanup on Unmount
+  // Cleanup
   useEffect(() => {
     return () => cleanupAudio();
   }, [cleanupAudio]);
 
-  // --- 5. UI Render ---
   return (
     <div className="space-y-6">
-      {/* Top Header with Section Timer */}
       <div className="flex justify-between items-center border-b pb-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-800">{subsection}</h2>
-          <p className="text-sm text-gray-500">Read the text below into the microphone.</p>
+          <h2 className="text-xl font-bold text-gray-800 tracking-tight uppercase">{subsection}</h2>
+          <p className="text-sm text-gray-500">Look at the text below. In {prepSeconds} seconds, you must read this text aloud.</p>
         </div>
-        <SectionTimerDisplay 
-          formattedTime={formattedTime} 
-          isExpired={isSectionExpired} 
-        />
+        <SectionTimerDisplay formattedTime={formattedTime} isExpired={isSectionExpired} />
       </div>
 
-      {/* Main Content: The Text to Read */}
-      <div className="rounded-xl border-2 border-blue-50 p-6 bg-white shadow-sm ring-1 ring-gray-200">
-        <p className="text-lg leading-relaxed text-gray-800 font-medium">
+      <div className="rounded-xl border border-gray-200 p-8 bg-white shadow-sm ring-1 ring-gray-900/5">
+        <p className="text-xl leading-relaxed text-gray-800 font-medium selection:bg-sky-100">
           {promptText}
         </p>
       </div>
 
-      {/* Recording Logic UI */}
       {isSectionExpired ? (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-center font-medium">
-          ⚠️ Section time has expired. Your progress has been saved.
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-center font-medium">
+          Time is up. Your recording has been submitted.
         </div>
       ) : (
         <RecordingStatusDisplay
@@ -143,13 +119,6 @@ export default function ReadAloud({
           error={recorderError}
         />
       )}
-
-      {/* Footer Info */}
-      <div className="text-xs text-gray-400 text-center italic">
-        {phase === PHASES.PREP && "Preparation phase: Read the text silently."}
-        {phase === PHASES.RECORDING && "Recording: Speak clearly now."}
-        {phase === PHASES.FINISHED && "Ready: Click next to proceed."}
-      </div>
     </div>
   );
 }
