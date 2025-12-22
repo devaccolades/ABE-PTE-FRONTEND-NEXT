@@ -1,90 +1,94 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+import { useEffect, useState } from "react";
+import { useExamStore } from "@/store";
 
 export default function MultipleChoiceMulti({
-  paragraphs = [],
-  // questionText = "Which of the following statements are true?",
+  paragraphs = "",
   options = [],
-  durationSeconds = 0,
-  onNext,
 }) {
-  const [selected, setSelected] = useState(() => new Set());
-  const [left, setLeft] = useState(durationSeconds);
+  const setAnswerKey = useExamStore((s) => s.setAnswerKey);
+  const setPhase = useExamStore((s) => s.setPhase);
 
-  const hasTimer = durationSeconds && durationSeconds > 0;
+  // 1. Keep a local state for the UI only
+  const [selectedIndices, setSelectedIndices] = useState(new Set());
 
+  // 2. Parse text and question
+  const text = paragraphs.split("Question:")[0]?.trim();
+  const questionText = paragraphs.split("Question:")[1]?.trim();
+
+  // 3. INITIAL SYNC: Set phase to prep on mount
   useEffect(() => {
-    console.log("paragraphs", paragraphs);
-    console.log("options", options);
-  }, []);
+    setPhase("prep");
+  }, [setPhase]);
 
+  // 4. DATA SYNC: Whenever selectedIndices changes, update the Store and Phase
+  // This useEffect is the fix. It separates the "click" from the "global update"
   useEffect(() => {
-    if (!hasTimer) return;
-    if (left <= 0) {
-      onNext?.();
-      return;
+    const selectedIds = Array.from(selectedIndices).map((idx) => options[idx].id);
+    
+    // Update global store
+    setAnswerKey("answer", selectedIds);
+
+    // Update global phase based on selection
+    if (selectedIndices.size > 0) {
+      setPhase("writing");
+    } else {
+      setPhase("prep");
     }
-    const t = setTimeout(() => setLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [left, hasTimer, onNext]);
+  }, [selectedIndices, options, setAnswerKey, setPhase]);
 
-  const progress = useMemo(() => {
-    if (!hasTimer) return 0;
-    return Math.round(((durationSeconds - left) / durationSeconds) * 100);
-  }, [durationSeconds, left, hasTimer]);
-
-  return (
-    <div className="space-y-6">
-      {hasTimer && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <div className="font-medium">Time remaining</div>
-            <div>{left}s</div>
-          </div>
-          <Progress value={progress} />
-        </div>
-      )}
-
-      {/* <div className="rounded-lg border border-gray-200 p-6 bg-gray-50 text-gray-900 leading-relaxed space-y-3">
-        {paragraphs.map((p, i) => (
-          <p key={`p-${i}`} className="text-base">
-            {p}
-          </p>
-        ))}
-      </div> */}
-
-      <div className="space-y-3">
-        {/* <div className="text-sm font-medium text-gray-800">{questionText}</div> */}
-        <div className="grid gap-2">
-          {options.map((opt, i) => (
-            <label
-              key={`opt-${i}`}
-              className="flex items-start gap-3 rounded-md border border-gray-200 bg-white p-3 hover:bg-gray-50"
-            >
-              <input
-                type="checkbox"
-                className="mt-1 h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-600"
-                checked={selected.has(i)}
-                onChange={(e) => toggle(i, e.target.checked)}
-              />
-              <span className="text-sm text-gray-900 leading-relaxed">
-                {opt}
-              </span>
-            </label>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
+  // 5. Toggle logic only handles the local set
   function toggle(index, isChecked) {
-    setSelected((prev) => {
+    setSelectedIndices((prev) => {
       const next = new Set(prev);
       if (isChecked) next.add(index);
       else next.delete(index);
       return next;
     });
   }
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-lg border border-gray-200 p-6 bg-gray-50 text-gray-900 leading-relaxed shadow-sm">
+        <p className="text-base whitespace-pre-wrap">{text}</p>
+      </div>
+
+      <div className="space-y-4">
+        <div className="text-md font-bold text-sky-900">
+          {questionText || "Select all correct statements:"}
+        </div>
+        
+        <div className="grid gap-3">
+          {options.map((opt, i) => (
+            <label
+              key={opt.id || i}
+              className={`flex items-start gap-3 rounded-lg border p-4 transition-all cursor-pointer ${
+                selectedIndices.has(i)
+                  ? "border-sky-500 bg-sky-50/50 ring-1 ring-sky-500"
+                  : "border-gray-200 bg-white hover:bg-gray-50"
+              }`}
+            >
+              <div className="flex items-center h-5">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500 cursor-pointer"
+                  checked={selectedIndices.has(i)}
+                  onChange={(e) => toggle(i, e.target.checked)}
+                />
+              </div>
+              <span className="text-sm text-gray-800 leading-snug select-none">
+                {opt.option_text}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {selectedIndices.size === 0 && (
+        <p className="text-xs text-amber-600 italic">
+          * Please select at least one option to continue.
+        </p>
+      )}
+    </div>
+  );
 }

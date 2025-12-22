@@ -69,6 +69,7 @@ export default function ExamShell({ mocktestList }) {
 
         setCurrentQuestion(q);
         console.log("current Question", q);
+        console.log("next Question URL", data.next);
         setNextQuestion(data.next);
 
         localStorage.setItem("current_question", targetUrl);
@@ -121,9 +122,17 @@ export default function ExamShell({ mocktestList }) {
   // --- 3. Submission Logic ---
   const handleModalNext = async () => {
     setStopSignal(true);
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    setCallAreYouSure(false);
+
+    // 1. Immediately clear the UI to show the skeleton
+    setCurrentQuestion(null);
+    setLoading(true);
+
+    // 2. Buffer for Audio/State finalization
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     const finalAnswer = useExamStore.getState().answer;
+    console.log("answer", finalAnswer);
     const formData = new FormData();
     formData.append("session_id", finalAnswer.session_id);
     formData.append("question_name", finalAnswer.question_name);
@@ -132,18 +141,14 @@ export default function ExamShell({ mocktestList }) {
       formData.append("answer_audio", finalAnswer.answer_audio, "answer.webm");
     }
 
-    if (finalAnswer.answer) {
-      if (typeof finalAnswer.answer === "object") {
-        formData.append("answer", JSON.stringify(finalAnswer.answer));
-        Object.keys(finalAnswer.answer).forEach((key) => {
-          formData.append(key, String(finalAnswer.answer[key]));
-        });
-      } else {
-        formData.append("answer", finalAnswer.answer);
-      }
+    if (finalAnswer.answer !== undefined) {
+      const answerVal =
+        typeof finalAnswer.answer === "object"
+          ? JSON.stringify(finalAnswer.answer)
+          : finalAnswer.answer;
+      formData.append("answer", answerVal);
     }
 
-    setLoading(true);
     try {
       const postRes = await fetch(`${baseUrl}user-response/`, {
         method: "POST",
@@ -151,14 +156,27 @@ export default function ExamShell({ mocktestList }) {
       });
 
       if (!postRes.ok) throw new Error("Submission Failed");
-      console.log(finalAnswer.answer);
-      setCallAreYouSure(false);
-      loadQuestion(nextQuestionUrl);
+
+      // --- CRITICAL STEP ---
+      // Clear the answer key in the store so the NEXT question
+      // doesn't inherit the OLD answer/audio.
+      setAnswerKey("answer", {});
+      setAnswerKey("answer_audio", null);
+
+      if (nextQuestionUrl) {
+        // Adding a tiny delay here ensures the backend has
+        // fully committed the previous response to the DB.
+        setTimeout(() => {
+          loadQuestion(nextQuestionUrl);
+        }, 100);
+      } else {
+        setLoading(false);
+      }
     } catch (error) {
       console.error("Submission Error:", error);
       alert("Failed to save answer.");
-    } finally {
       setLoading(false);
+      // Optional: Restore current question if fetch fails so user can retry
     }
   };
 
