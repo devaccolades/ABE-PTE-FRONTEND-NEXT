@@ -16,6 +16,7 @@ export default function ReadAloud({
   prepSeconds = 30,
   recordSeconds = 45,
   subsection = "Read Aloud",
+  name
 }) {
   const globalPhase = useExamStore((s) => s.setPhase);
   const setAnswerKey = useExamStore((s) => s.setAnswerKey);
@@ -93,8 +94,8 @@ export default function ReadAloud({
     <div className="space-y-6">
       <div className="flex justify-between items-center border-b pb-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-800 tracking-tight uppercase">{subsection}</h2>
-          <p className="text-sm text-gray-500">Look at the text below. In {prepSeconds} seconds, you must read this text aloud.</p>
+          <h2 className="text-xl font-bold text-gray-800 tracking-tight uppercase">{name}</h2>
+          {/* <p className="text-sm text-gray-500">Look at the text below. In {prepSeconds} seconds, you must read this text aloud.</p> */}
         </div>
         <SectionTimerDisplay formattedTime={formattedTime} isExpired={isSectionExpired} />
       </div>

@@ -27,7 +27,7 @@ export default function RecordingStatusDisplay({
         return (
             <div className="space-y-2">
                 <div className="font-medium text-gray-800">
-                    **Preparing…** ({prepLeft}s)
+                    Preparing ({prepLeft}s)
                 </div>
                 <Progress value={prepProgress} />
                 <div className="text-xs text-gray-600">
@@ -40,10 +40,10 @@ export default function RecordingStatusDisplay({
     if (phase === PHASES.RECORDING) {
         return (
             <div className="space-y-2">
-                <div className="font-medium text-gray-800">
-                    🔴 **Recording…** ({recLeft}s)
+                <div className="font-medium text-red-800">
+                    🔴 Recording ({recLeft}s)
                 </div>
-                <Progress value={recProgress} />
+                <Progress value={recProgress} className="bg-red-50" bg="bg-red-800"/>
                 <div className="text-xs text-gray-600">
                     The recording will stop automatically.
                 </div>

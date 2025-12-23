@@ -249,6 +249,7 @@ function renderQuestionComponent(q, onNext) {
           promptText={q.text}
           prepSeconds={q.reading_time}
           recordSeconds={q.answering_time}
+          name={q.name}
           onNext={onNext}
         />
       );
@@ -267,6 +268,7 @@ function renderQuestionComponent(q, onNext) {
     case "repeat_sentence":
     case "retell_lecture":
     case "answer_short_question":
+    case "respond_to_a_situation":
     case "summarise_group_discussion":
       return (
         <RetellLecture
@@ -405,6 +407,10 @@ function titleFor(sub) {
   const map = {
     read_aloud: "Speaking: Read Aloud",
     describe_image: "Speaking: Describe Image",
+    answer_short_question: "Speaking: Answer Short Question",
+    respond_to_a_situation: "Speaking: Respond to a Situation",
+    summarise_group_discussion: "Speaking: Summarize Group Discussion",
+    summarize_written_text: "Writing: Summarize Written Text",
     write_essay: "Writing: Essay",
     fib_dropdown: "Reading: Fill in the Blanks",
     retell_lecture: "Speaking: Retell Lecture",
