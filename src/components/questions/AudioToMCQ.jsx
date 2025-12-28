@@ -1,312 +1,281 @@
-import React, { useEffect, useRef, useState } from "react";
+"use client";
+import React, { useEffect, useRef, useState, useCallback } from "react";
+import { Progress } from "@/components/ui/progress";
+import {
+  Loader2,
+  Volume2,
+  CheckCircle2,
+  Play,
+  Square,
+  Headphones,
+} from "lucide-react";
+import { useExamStore } from "@/store";
+import { useSectionTimer } from "../hooks/useSectionTimer";
+import SectionTimerDisplay from "../ui/SectionTimerDisplay";
 
-/**
- * AudioToMCQ (plain JavaScript, React) — Auto-play main audio after prepSeconds
- *
- * Props:
- * - audioSrc (string) OR output (string)
- * - prepSeconds (number) optional (default 0) — wait this long then autoplay main audio
- * - options: array of { id, text, audioSrc? }
- *
- * Notes:
- * - No manual controls for the main audio (no Play/Stop buttons)
- * - Option-level audio still has a small player with Play/Stop for convenience
- * - Submit / Clear / Next buttons and their logic have been removed
- */
+export default function AudioToMCQ({
+  audioSrc,
+  output,
+  prepSeconds = 5,
+  type = "l_mc_multiple", // "l_mc_multiple" or "highlight_correct_summary"
+  options = [],
+  subsection = "Listening: Multiple Choice",
+  questionId,
+}) {
+  const setPhase = useExamStore((s) => s.setPhase);
+  const setAnswerKey = useExamStore((s) => s.setAnswerKey);
 
-export default function AudioToMCQ({ audioSrc, output, prepSeconds = 0, options = [] }) {
   const mainSrc = audioSrc || output || "";
   const audioRef = useRef(null);
   const optionPlayersRef = useRef(new Map());
 
-  const [playing, setPlaying] = useState(false);
-  const [playedCount, setPlayedCount] = useState(0);
-  const [progress, setProgress] = useState(0);
-  const [phase, setPhase] = useState(prepSeconds > 0 ? "prep" : "idle"); // prep | playing | idle | finished | error
+  const [status, setStatus] = useState("LOADING");
   const [prepLeft, setPrepLeft] = useState(prepSeconds);
-  const [error, setError] = useState("");
-
-  // selection state (multi-select) still available to UI, but no submit button
+  const [progress, setProgress] = useState(0);
   const [selectedIds, setSelectedIds] = useState(new Set());
 
-  // Attach listeners to main audio
+  const { formattedTime, isExpired: isSectionExpired } = useSectionTimer();
+
+  // --- 1. MEDIA HANDLERS ---
+  const handleCanPlay = useCallback(() => {
+    if (status === "LOADING") setStatus("PREP");
+  }, [status]);
+
+  const handleAudioEnd = () => setStatus("FINISHED");
+
+  const handleTimeUpdate = () => {
+    const el = audioRef.current;
+    if (el && el.duration) {
+      setProgress((el.currentTime / el.duration) * 100);
+    }
+  };
+
+  // --- 2. TIMERS & AUTOPLAY ---
   useEffect(() => {
-    const audioEl = audioRef.current;
-    if (!audioEl) return;
+    if (status !== "PREP") return;
 
-    function onPlay() {
-      setPlaying(true);
-      setPlayedCount((c) => c + 1);
-      setPhase("playing");
-      // pause option audios when main plays
-      optionPlayersRef.current.forEach((el) => {
-        try {
-          if (el && !el.paused) {
-            el.pause();
-            el.currentTime = 0;
-          }
-        } catch (e) {}
-      });
-    }
-    function onPauseOrEnded() {
-      setPlaying(false);
-      if (audioEl.ended) setPhase("finished");
-    }
-    function onTimeUpdate() {
-      if (audioEl.duration && !isNaN(audioEl.duration)) {
-        setProgress((audioEl.currentTime / audioEl.duration) * 100);
-      }
-    }
-    function onError() {
-      setError("Main audio failed to play.");
-      setPhase("error");
-    }
-
-    audioEl.addEventListener("play", onPlay);
-    audioEl.addEventListener("pause", onPauseOrEnded);
-    audioEl.addEventListener("ended", onPauseOrEnded);
-    audioEl.addEventListener("timeupdate", onTimeUpdate);
-    audioEl.addEventListener("error", onError);
-
-    return () => {
-      audioEl.removeEventListener("play", onPlay);
-      audioEl.removeEventListener("pause", onPauseOrEnded);
-      audioEl.removeEventListener("ended", onPauseOrEnded);
-      audioEl.removeEventListener("timeupdate", onTimeUpdate);
-      audioEl.removeEventListener("error", onError);
-    };
-  }, [mainSrc]);
-
-  // Reset UI when main source or options change
-  useEffect(() => {
-    setSelectedIds(new Set());
-    setPlayedCount(0);
-    setProgress(0);
-    setPlaying(false);
-    setError("");
-    setPhase(prepSeconds > 0 ? "prep" : "idle");
-    setPrepLeft(prepSeconds);
-
-    if (audioRef.current) {
-      try {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-      } catch (e) {}
-    }
-
-    optionPlayersRef.current.forEach((el) => {
-      try {
-        if (el && !el.paused) {
-          el.pause();
-          el.currentTime = 0;
-        }
-      } catch (e) {}
-    });
-  }, [mainSrc, options, prepSeconds]);
-
-  // Prep countdown — autoplay when reaches 0
-  useEffect(() => {
-    if (phase !== "prep") return;
     if (prepLeft <= 0) {
-      autoPlayMain().catch((e) => {
-        console.warn("Autoplay failed:", e);
-        setError("Autoplay was blocked or failed.");
-        setPhase("error");
-      });
-      return;
-    }
-    const t = setTimeout(() => setPrepLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [phase, prepLeft]);
-
-  // autoplay helper
-  async function autoPlayMain() {
-    if (!mainSrc || !audioRef.current) {
-      setError("No main audio source available.");
-      setPhase("error");
-      return;
-    }
-    try {
-      audioRef.current.currentTime = 0;
-    } catch {}
-    try {
-      const p = audioRef.current.play();
-      if (p && p.catch) {
-        await p.catch((err) => {
-          // autoplay blocked
-          throw err;
-        });
+      setStatus("PLAYING");
+      const playPromise = audioRef.current?.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => console.warn("Autoplay blocked", err));
       }
-    } catch (err) {
-      throw err;
+      return;
     }
-  }
 
-  // register/unregister option-level audio elements so parent can pause them
-  function registerOptionPlayer(id, el) {
-    if (!id) return;
-    if (el) optionPlayersRef.current.set(id, el);
-    else optionPlayersRef.current.delete(id);
-  }
+    const timer = setTimeout(() => setPrepLeft((prev) => prev - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [prepLeft, status]);
 
-  // selection toggling (multi-select)
-  function toggleSelect(id) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  // --- 3. SELECTION LOGIC (SINGLE VS MULTIPLE) ---
+  const handleSelection = (id) => {
+    const isSingleSelect =
+      type === "highlight_correct_summary" || type === "l_mc_single" || type === "select_missing_word";
+
+    if (isSingleSelect) {
+      // For radio-style, we only keep the latest ID
+      setSelectedIds(new Set([id]));
+    } else {
+      // For checkbox-style (l_mc_multiple), we toggle
+      const newSet = new Set(selectedIds);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      setSelectedIds(newSet);
+    }
+  };
+
+  const pauseAllOptionAudios = () => {
+    optionPlayersRef.current.forEach((player) => {
+      try {
+        player.pause();
+        player.currentTime = 0;
+      } catch (e) {}
     });
-  }
+  };
+
+  // --- 4. SYNC TO GLOBAL STORE ---
+  useEffect(() => {
+    setAnswerKey("answer", Array.from(selectedIds).join(","));
+
+    // Enable "Next" button if something is selected or section timer expired
+    if (isSectionExpired || selectedIds.size > 0) {
+      setPhase("finished");
+    } else {
+      setPhase("prep");
+    }
+  }, [selectedIds, isSectionExpired, setPhase, setAnswerKey]);
 
   return (
     <div className="space-y-6">
-      {/* Playback card — no manual play/stop */}
-      <div className="rounded-lg border border-gray-200 p-4 bg-gray-50 text-gray-900">
-        <div className="flex items-center gap-3">
-          {/* Show readonly status instead of controls */}
-          <div className="px-3 py-2 rounded-md font-medium shadow-sm bg-white border">
-            {phase === "prep"
-              ? `Starting in ${prepLeft}s`
-              : playing
-              ? "Playing"
-              : phase === "finished"
-              ? "Finished"
-              : phase === "error"
-              ? "Error"
-              : "Idle"}
-          </div>
-
-          <div className="text-sm text-gray-600">Plays: {playedCount}</div>
+      <div className="flex justify-between items-center border-b pb-4">
+        <div className="flex items-center gap-2 text-sky-700">
+          <Headphones className="w-5 h-5" />
+          <h2 className="text-xl font-bold uppercase tracking-tight">
+            {subsection?.replace(/_/g, " ")}
+          </h2>
         </div>
-
-        <div className="mt-3 text-sm flex items-center justify-between">
-          <div className="font-medium">Playback progress</div>
-          <div className="text-xs text-gray-600">{Math.round(progress)}%</div>
-        </div>
-
-        <div className="w-full h-2 bg-gray-200 rounded mt-2 overflow-hidden">
-          <div
-            className="h-full bg-gray-700"
-            style={{ width: `${progress}%`, transition: "width 120ms linear" }}
-          />
-        </div>
-
-        {error && <div className="mt-2 text-xs text-red-600">{error}</div>}
+        <SectionTimerDisplay
+          formattedTime={formattedTime}
+          isExpired={isSectionExpired}
+        />
       </div>
 
-      {/* Hidden main audio element (no controls) */}
-      <audio ref={audioRef} src={mainSrc} preload="auto" />
+      {/* Main Playback Card */}
+      <div className="bg-white rounded-xl border border-gray-200 p-8 shadow-sm flex flex-col items-center justify-center min-h-[160px] space-y-4">
+        {status === "LOADING" && (
+          <div className="flex flex-col items-center space-y-3">
+            <Loader2 className="h-10 w-10 text-sky-500 animate-spin" />
+            <p className="text-gray-400 font-medium text-sm uppercase">
+              Buffering...
+            </p>
+          </div>
+        )}
 
-      {/* Options (multi-select) */}
-      <div className="space-y-2">
-        <div className="font-medium">Select all correct options</div>
-        <div className="grid gap-2">
-          {options.map((opt) => {
-            const checked = selectedIds.has(opt.id);
-            return (
-              <label
-                key={opt.id}
-                className={`flex items-start gap-3 p-3 rounded-md border cursor-pointer hover:shadow-sm ${
-                  checked ? "border-blue-500 bg-blue-50" : "bg-white"
+        {status === "PREP" && (
+          <div className="w-full max-w-md text-center space-y-4">
+            <div className="flex justify-between text-sm font-bold text-amber-600 uppercase tracking-widest">
+              <span>Preparation</span>
+              <span>{prepLeft}s</span>
+            </div>
+            <Progress
+              value={(prepLeft / prepSeconds) * 100}
+              className="h-3 bg-amber-50"
+            />
+          </div>
+        )}
+
+        {status === "PLAYING" && (
+          <div className="w-full max-w-md space-y-4">
+            <div className="flex justify-between items-center text-sky-600 font-bold text-xs uppercase">
+              <span className="flex items-center gap-2">
+                <Volume2 className="h-4 w-4 animate-bounce" /> Status: Playing
+              </span>
+              <span>{Math.round(progress)}%</span>
+            </div>
+            <Progress value={progress} className="h-2 bg-sky-50" />
+          </div>
+        )}
+
+        {status === "FINISHED" && (
+          <div className="flex flex-col items-center space-y-2 text-green-600">
+            <CheckCircle2 className="h-10 w-10 animate-in zoom-in" />
+            <p className="font-bold uppercase text-xs">
+              Listening Phase Complete
+            </p>
+          </div>
+        )}
+
+        <audio
+          ref={audioRef}
+          src={mainSrc}
+          onCanPlayThrough={handleCanPlay}
+          onTimeUpdate={handleTimeUpdate}
+          onEnded={handleAudioEnd}
+          onPlay={pauseAllOptionAudios}
+          className="hidden"
+          preload="auto"
+        />
+      </div>
+
+      {/* Options Grid */}
+      <div className="grid gap-4">
+        {options.map((opt) => {
+          const isChecked = selectedIds.has(opt.id);
+          const isSingle = type === "highlight_correct_summary";
+
+          return (
+            <label
+              key={opt.id}
+              className={`flex items-start gap-4 rounded-xl border-2 p-5 cursor-pointer transition-all duration-200
+                ${
+                  isChecked
+                    ? "border-sky-500 bg-sky-50 shadow-md transform scale-[1.01]"
+                    : "border-gray-100 bg-white hover:border-sky-200 hover:bg-gray-50/50"
                 }`}
-              >
-                <input
-                  type="checkbox"
-                  name="audio-mcq"
-                  checked={checked}
-                  onChange={() => toggleSelect(opt.id)}
-                  className="mt-1 form-checkbox"
-                />
-
-                <div className="flex-1">
-                  <div className="text-sm font-medium">{opt.text}</div>
-
-                  {opt.audioSrc ? (
-                    <div className="mt-1">
-                      <SmallAudioPlayer
-                        id={opt.id}
-                        src={opt.audioSrc}
-                        register={registerOptionPlayer}
-                        pauseMain={() => {
-                          try {
-                            if (audioRef.current && !audioRef.current.paused) {
-                              audioRef.current.pause();
-                              audioRef.current.currentTime = 0;
-                            }
-                          } catch (e) {}
-                        }}
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              </label>
-            );
-          })}
-        </div>
+            >
+              <input
+                type={isSingle ? "radio" : "checkbox"}
+                name={isSingle ? "mcq-single" : opt.id}
+                checked={isChecked}
+                onChange={() => handleSelection(opt.id)}
+                className={`mt-1 h-5 w-5 border-gray-300 text-sky-600 focus:ring-sky-500 ${
+                  isSingle ? "rounded-full" : "rounded"
+                }`}
+              />
+              <div className="flex-1">
+                <p
+                  className={`text-base leading-relaxed ${
+                    isChecked ? "text-sky-900 font-semibold" : "text-gray-700"
+                  }`}
+                >
+                  {opt.option_text}
+                </p>
+                {opt.audioSrc && (
+                  <OptionAudioPlayer
+                    src={opt.audioSrc}
+                    id={opt.id}
+                    register={(el) => {
+                      if (el) optionPlayersRef.current.set(opt.id, el);
+                      else optionPlayersRef.current.delete(opt.id);
+                    }}
+                    pauseMain={() => audioRef.current?.pause()}
+                  />
+                )}
+              </div>
+            </label>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-/** SmallAudioPlayer: per-option player with Play/Stop button */
-function SmallAudioPlayer({ id, src, register, pauseMain }) {
+function OptionAudioPlayer({ src, id, register, pauseMain }) {
   const ref = useRef(null);
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
-    if (!register) return;
-    register(id, ref.current);
-    return () => register(id, null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+    register(ref.current);
+    return () => register(null);
+  }, [id, register]);
 
-  useEffect(() => {
-    const a = ref.current;
-    if (!a) return;
-    function onPlay() {
-      setPlaying(true);
-      if (pauseMain) pauseMain();
-    }
-    function onPause() {
-      setPlaying(false);
-    }
-    a.addEventListener("play", onPlay);
-    a.addEventListener("pause", onPause);
-    a.addEventListener("ended", onPause);
-    return () => {
-      a.removeEventListener("play", onPlay);
-      a.removeEventListener("pause", onPause);
-      a.removeEventListener("ended", onPause);
-    };
-  }, [ref.current]);
-
-  function toggle() {
+  const toggle = (e) => {
+    e.preventDefault();
     if (!ref.current) return;
     if (playing) {
-      try {
-        ref.current.pause();
-        ref.current.currentTime = 0;
-      } catch {}
+      ref.current.pause();
+      ref.current.currentTime = 0;
     } else {
-      try {
-        ref.current.currentTime = 0;
-        const p = ref.current.play();
-        if (p && p.catch) p.catch(() => {});
-      } catch {}
+      pauseMain();
+      ref.current.play();
     }
-  }
+  };
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="mt-3">
       <button
-        type="button"
         onClick={toggle}
-        className="px-2 py-1 border rounded-md text-sm bg-white"
+        className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black tracking-tighter transition-colors ${
+          playing
+            ? "bg-red-500 text-white"
+            : "bg-sky-100 text-sky-700 hover:bg-sky-200"
+        }`}
       >
-        {playing ? "Stop" : "Play"}
+        {playing ? (
+          <Square className="h-3 w-3 fill-current" />
+        ) : (
+          <Play className="h-3 w-3 fill-current" />
+        )}
+        {playing ? "STOP AUDIO" : "LISTEN TO OPTION"}
       </button>
-      <audio ref={ref} src={src} preload="none" />
+      <audio
+        ref={ref}
+        src={src}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => setPlaying(false)}
+        className="hidden"
+      />
     </div>
   );
 }
