@@ -1,18 +1,20 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+import { useExamStore } from "@/store";
 
 export default function ReorderParagraphs({
   items = [], // [{ id, text, label? }]
-  durationSeconds = 0,
-  onNext,
+  subsection,
+  questionId, // Ensure you pass the questionId to map the answer correctly
 }) {
+  const setGlobalPhase = useExamStore((s) => s.setPhase);
+  const setAnswerKey = useExamStore((s) => s.setAnswerKey);
+
   const initialSource = useMemo(
     () =>
       items.map((it, i) => ({
         id: it.id ?? String(i),
-        text: it.text ?? String(it),
+        text: it.option_text ?? String(it),
         label: it.label ?? indexToLabel(i),
       })),
     [items]
@@ -21,44 +23,35 @@ export default function ReorderParagraphs({
   const [source, setSource] = useState(initialSource);
   const [target, setTarget] = useState([]);
 
-  const [left, setLeft] = useState(durationSeconds);
-  const hasTimer = durationSeconds && durationSeconds > 0;
-
+  // --- Logic: Sync Answer and Next Button ---
   useEffect(() => {
-    if (!hasTimer) return;
-    if (left <= 0) {
-      onNext?.();
-      return;
-    }
-    const t = setTimeout(() => setLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [left, hasTimer, onNext]);
+    if (source.length === 0 && target.length > 0) {
+      // 1. Create the position mapping (Position : ID)
+      // Result format: { "1": "15", "2": "12", ... }
+      const answerMapping = target.reduce((acc, item, index) => {
+        acc[index + 1] = item.id;
+        return acc;
+      }, {});
 
-  const progress = useMemo(() => {
-    if (!hasTimer) return 0;
-    return Math.round(((durationSeconds - left) / durationSeconds) * 100);
-  }, [durationSeconds, left, hasTimer]);
+      // 2. Save to global store
+      setAnswerKey(questionId, answerMapping);
+      console.log("answer order", questionId, answerMapping);
+
+      // 3. Enable Next Button
+      setGlobalPhase("finished");
+    } else {
+      setGlobalPhase("prep");
+    }
+  }, [source, target, setGlobalPhase, setAnswerKey, questionId]);
 
   // Drag-n-drop handlers
   function onDragStart(e, payload) {
     e.dataTransfer.setData("application/json", JSON.stringify(payload));
     e.dataTransfer.effectAllowed = "move";
   }
-  function onDropToTargetEnd(e) {
-    e.preventDefault();
-    if (left <= 0 && hasTimer) return;
-    const data = safeParse(e.dataTransfer.getData("application/json"));
-    if (!data) return;
-    if (data.from === "source") {
-      setSource((s) => s.filter((x) => x.id !== data.item.id));
-      setTarget((t) => [...t.filter((x) => x.id !== data.item.id), data.item]);
-    } else if (data.from === "target") {
-      setTarget((t) => [...t.filter((x) => x.id !== data.item.id), data.item]);
-    }
-  }
+
   function onDropToSource(e) {
     e.preventDefault();
-    if (left <= 0 && hasTimer) return;
     const data = safeParse(e.dataTransfer.getData("application/json"));
     if (!data) return;
     if (data.from === "target") {
@@ -66,109 +59,96 @@ export default function ReorderParagraphs({
       setSource((s) => [...s, data.item]);
     }
   }
-  function onDropBefore(e, beforeId) {
+
+  function onDropToTargetAtPosition(e, position) {
     e.preventDefault();
-    if (left <= 0 && hasTimer) return;
+    e.stopPropagation();
+
     const data = safeParse(e.dataTransfer.getData("application/json"));
     if (!data) return;
-    if (data.from === "target") {
-      setTarget((t) =>
-        insertBefore(
-          t.filter((x) => x.id !== data.item.id),
-          data.item,
-          beforeId
-        )
-      );
-    } else if (data.from === "source") {
+
+    if (data.from === "source") {
       setSource((s) => s.filter((x) => x.id !== data.item.id));
-      setTarget((t) => insertBefore(t, data.item, beforeId));
+      setTarget((t) => {
+        const copy = [...t];
+        copy.splice(position, 0, data.item);
+        return copy;
+      });
+    } else if (data.from === "target") {
+      setTarget((t) => {
+        const currentIndex = t.findIndex((x) => x.id === data.item.id);
+        if (currentIndex === -1) return t;
+
+        const filtered = t.filter((x) => x.id !== data.item.id);
+        let adjustedPosition = position;
+        if (currentIndex < position) {
+          adjustedPosition = position - 1;
+        }
+
+        const copy = [...filtered];
+        copy.splice(adjustedPosition, 0, data.item);
+        return copy;
+      });
     }
   }
 
   return (
     <div className="space-y-6">
-      {hasTimer && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <div className="font-medium">Time remaining</div>
-            <div>{left}s</div>
-          </div>
-          <Progress value={progress} />
-        </div>
-      )}
+      <div className="flex justify-between items-center border-b pb-4">
+        <h2 className="text-xl font-bold text-gray-800 uppercase">
+          {subsection?.replace(/_/g, " ") || "Reorder Paragraphs"}
+        </h2>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Column
           title="Source"
           items={source}
-          droppable
           onDropContainer={onDropToSource}
           onDragStart={onDragStart}
-          disabled={hasTimer && left <= 0}
-          equalHeight
         />
         <Column
           title="Target"
           items={target}
-          droppable={false}
-          onDropBefore={onDropBefore}
+          onDropAtPosition={onDropToTargetAtPosition}
           onDragStart={onDragStart}
-          disabled={hasTimer && left <= 0}
-          onDropEnd={onDropToTargetEnd}
-          showDropZones
-          equalHeight
-          targetItemCount={target.length}
         />
       </div>
+
+      {source.length > 0 && (
+        <p className="text-sm text-amber-600 font-medium animate-pulse text-center bg-amber-50 py-2 rounded-lg border border-amber-100">
+          ⚠️ Move all paragraphs to the Target box to save your answer.
+        </p>
+      )}
     </div>
   );
 }
 
+// ... Column, DraggableCard, and DropZone components remain same as previous response ...
+// (Ensure they are included below in your actual file)
+
 function Column({
   title,
   items,
-  droppable,
   onDropContainer,
-  onDropBefore,
+  onDropAtPosition,
   onDragStart,
-  onDropEnd,
-  showDropZones,
-  disabled,
-  equalHeight,
-  targetItemCount,
 }) {
-  const showDropZonesBoxes =
-    showDropZones && targetItemCount !== undefined && targetItemCount < 3;
-  const isTarget = title.toLowerCase() === "target";
-  const enableCardDrop =
-    isTarget && targetItemCount !== undefined && targetItemCount >= 3;
-
+  const isSource = title.toLowerCase() === "source";
   return (
     <div
-      className={`rounded-xl border border-gray-200 bg-white shadow-sm p-4 ${
-        equalHeight ? "h-96 flex flex-col" : ""
-      }`}
-      onDragOver={
-        droppable || enableCardDrop
-          ? (e) => {
-              e.preventDefault();
-            }
-          : undefined
-      }
-      onDrop={
-        droppable ? onDropContainer : enableCardDrop ? onDropEnd : undefined
-      }
+      className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 h-[500px] flex flex-col"
+      onDragOver={isSource ? (e) => e.preventDefault() : undefined}
+      onDrop={isSource ? onDropContainer : undefined}
     >
-      <div className="text-sm font-medium text-gray-700 mb-3">{title}</div>
-      <div
-        className={`space-y-3 ${
-          equalHeight ? "flex-1 overflow-y-auto" : "min-h-40"
-        }`}
-      >
-        {showDropZonesBoxes && (
+      <div className="text-sm font-bold text-gray-700 mb-3 uppercase border-b pb-2">
+        {title}
+      </div>
+      <div className="flex-1 overflow-y-auto space-y-2">
+        {!isSource && (
           <DropZone
-            onDrop={(e) => onDropBefore?.(e, items[0]?.id)}
-            label="Drop here to place first"
+            onDrop={(e) => onDropAtPosition?.(e, 0)}
+            label={items.length === 0 ? "Drop here" : "Place at top"}
           />
         )}
         {items.map((item, idx) => (
@@ -177,86 +157,51 @@ function Column({
               item={item}
               origin={title.toLowerCase()}
               onDragStart={onDragStart}
-              disabled={disabled}
-              enableDrop={enableCardDrop}
-              onDropBefore={
-                enableCardDrop ? (e) => onDropBefore?.(e, item.id) : undefined
-              }
             />
-            {showDropZonesBoxes && (
-              <DropZone
-                onDrop={(e) =>
-                  idx === items.length - 1
-                    ? onDropEnd?.(e)
-                    : onDropBefore?.(e, items[idx + 1].id)
-                }
-              />
+            {!isSource && (
+              <DropZone onDrop={(e) => onDropAtPosition?.(e, idx + 1)} />
             )}
           </div>
         ))}
-        {items.length === 0 && (
-          <div className="text-sm text-gray-400">(empty)</div>
+        {items.length === 0 && isSource && (
+          <div className="flex flex-col items-center justify-center h-full text-gray-400 py-12">
+            <span className="text-sm italic">All items moved</span>
+          </div>
         )}
       </div>
     </div>
   );
 }
 
-function DraggableCard({
-  item,
-  origin,
-  onDragStart,
-  disabled,
-  enableDrop,
-  onDropBefore,
-}) {
-  const [over, setOver] = useState(false);
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setOver(false);
-    if (onDropBefore) {
-      onDropBefore(e);
-    }
-  };
-
+function DraggableCard({ item, origin, onDragStart }) {
   return (
     <div
-      className={`rounded-lg border border-gray-200 bg-gray-50 p-3 cursor-move select-none hover:border-sky-300 ${
-        over && enableDrop ? "border-sky-400 bg-sky-50" : ""
-      }`}
-      draggable={!disabled}
+      className="rounded-lg border border-gray-200 bg-gray-50 p-4 cursor-grab active:cursor-grabbing select-none hover:border-sky-400 transition-all shadow-sm"
+      draggable
       onDragStart={(e) => onDragStart(e, { from: origin, item })}
-      onDragOver={
-        enableDrop
-          ? (e) => {
-              e.preventDefault();
-              setOver(true);
-            }
-          : (e) => e.preventDefault()
-      }
-      onDragLeave={enableDrop ? () => setOver(false) : undefined}
-      onDrop={enableDrop ? handleDrop : undefined}
     >
-      <div className="flex items-start gap-3">
-        <div className="h-6 w-6 shrink-0 rounded-full bg-sky-600 text-white grid place-items-center text-xs font-semibold">
+      <div className="flex items-start gap-4">
+        <div className="h-7 w-7 shrink-0 rounded-full bg-sky-600 text-white grid place-items-center text-xs font-bold">
           {item.label}
         </div>
-        <div className="text-sm text-gray-900 leading-relaxed">{item.text}</div>
+        <div className="text-[15px] text-gray-800 leading-relaxed font-medium">
+          {item.text}
+        </div>
       </div>
     </div>
   );
 }
 
-function DropZone({ onDrop, label = "Drop here" }) {
+function DropZone({ onDrop, label = "" }) {
   const [over, setOver] = useState(false);
   return (
     <div
-      className={`mt-2 h-10 rounded border-2 border-dashed ${
-        over ? "border-sky-400 bg-sky-50" : "border-gray-300"
-      } grid place-items-center transition-colors`}
+      className={`h-10 rounded-lg border-2 border-dashed transition-all ${
+        over ? "border-sky-500 bg-sky-50 h-14" : "border-gray-200 opacity-40"
+      }`}
       onDragOver={(e) => {
         e.preventDefault();
+        e.stopPropagation();
         setOver(true);
       }}
       onDragLeave={() => setOver(false)}
@@ -265,21 +210,16 @@ function DropZone({ onDrop, label = "Drop here" }) {
         onDrop?.(e);
       }}
     >
-      <span className="text-[11px] text-gray-400">{label}</span>
+      {label && (
+        <span className="text-[11px] font-bold text-gray-500 uppercase">
+          {label}
+        </span>
+      )}
     </div>
   );
 }
 
-function insertBefore(list, item, beforeId) {
-  const idx = list.findIndex((x) => x.id === beforeId);
-  if (idx === -1) return [...list, item];
-  const copy = [...list];
-  copy.splice(idx, 0, item);
-  return copy;
-}
-
 function indexToLabel(i) {
-  // A, B, C ... Z, AA, AB ...
   let n = i;
   let label = "";
   while (true) {

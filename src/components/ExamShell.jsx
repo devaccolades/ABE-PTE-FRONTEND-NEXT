@@ -23,6 +23,8 @@ import NameGate from "./NameGate";
 // UI
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import FillBlanksDragDrop from "./questions/FillBlanksDragDrop";
+import SummarizeTheText from "./questions/SummarizeTheText";
 
 export default function ExamShell({ mocktestList }) {
   const {
@@ -315,48 +317,74 @@ function renderQuestionComponent(q, onNext) {
         />
       );
 
+    case "fib_drag_drop":
+      return (
+        <FillBlanksDragDrop
+          key={id}
+          segments={q.text} // Your text segments
+          options={q.options} // The array of 6 objects you provided
+          subsection={q.subsection}
+        />
+      );
+
     case "mc_multiple":
       return (
         <MultipleChoiceMulti
           key={id}
           paragraphs={q.text}
           // questionText={q.questionText}
-          options={q.sub_questions[0].options}
+          options={q.options}
           onNext={onNext}
         />
       );
 
-    case "mcq-single":
+    case "mc_single":
       return (
         <MultipleChoiceSingle
           key={id}
-          paragraphs={q.paragraphs}
-          questionText={q.questionText}
+          paragraphs={q.text}
+          // questionText={q.text}
           options={q.options}
           onNext={onNext}
         />
       );
 
-    case "reorder-paragraphs":
-      return <ReorderParagraphs key={id} items={q.items} onNext={onNext} />;
+    case "reorder_paragraphs":
+      return <ReorderParagraphs key={id} items={q.options} onNext={onNext} />;
 
     // --- Listening ---
-    case "audio-to-mcq":
+    case "summarize_spoken_text":
+      return (
+        <SummarizeTheText
+          key={id}
+          audioUrl={q.audio}
+          prepSeconds={q.reading_time}
+          subsection={sub}
+          questionId={id}
+          onNext={onNext}
+        />
+      );
+
+    case "l_mc_multiple":
+    case "highlight_correct_summary":
+    case "l_mc_single":
+    case "select_missing_word":
       return (
         <AudioToMCQ
           key={id}
-          audioSrc={q.output}
+          type={q.subsection}
+          audioSrc={q.audio}
           options={q.options}
           onNext={onNext}
         />
       );
 
-    case "fill-in-the-blanks-typable":
+    case "l_fill_in_blanks":
       return (
         <FillBlanksTyped
           key={id}
-          segments={q.segments}
-          output={q.output}
+          textString={q.text}
+          audioSrc={q.audio}
           durationSeconds={q.durationSeconds}
           onNext={onNext}
         />

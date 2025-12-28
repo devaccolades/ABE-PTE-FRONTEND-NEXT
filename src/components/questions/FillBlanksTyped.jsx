@@ -1,253 +1,179 @@
 "use client";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Progress } from "@/components/ui/progress";
+import { Loader2, Volume2, PencilLine, Headphones, AlertCircle } from "lucide-react";
+import { useExamStore } from "@/store";
+import { useSectionTimer } from "../hooks/useSectionTimer";
+import SectionTimerDisplay from "../ui/SectionTimerDisplay";
 
-/**
- * FillBlanksTyped
- *
- * Props:
- * - audioSrc / output (string) : main audio source
- * - prepSeconds (number) : seconds to wait before auto-playing audio
- * - segments (array) : text segments; blanks are inserted between segments
- * - durationSeconds (number) : seconds allowed for typing (starts after audio ends or when autoplay is blocked)
- *
- * Notes:
- * - All manual controls (Play/Stop/Submit/Clear/Next) removed.
- * - Audio auto-plays after prepSeconds. If autoplay is blocked, the answer timer still starts.
- * - Inputs are enabled only during the answer period; they are disabled before the audio plays and after time expires.
- */
 export default function FillBlanksTyped({
   audioSrc: propAudioSrc,
   output,
-  prepSeconds = 0,
-  segments = [],
+  prepSeconds = 5,
+  textString = "", 
   durationSeconds = 60,
+  subsection = "Listening: Fill in the Blanks",
 }) {
-  const audioSrc = propAudioSrc || output || "";
+  const setPhase = useExamStore((s) => s.setPhase);
+  const setAnswerKey = useExamStore((s) => s.setAnswerKey);
+  const { formattedTime, isExpired: isSectionExpired } = useSectionTimer();
 
-  // number of blanks = segments.length - 1
+  const audioSrc = propAudioSrc || output || "";
+  const segments = useMemo(() => textString.split(/-{2,}/g), [textString]);
   const blankCount = Math.max(segments.length - 1, 0);
 
-  // typed values for blanks
+  const [status, setStatus] = useState("LOADING"); 
   const [values, setValues] = useState(() => Array(blankCount).fill(""));
-
-  // answer timer left (starts when audio ends or autoplay blocked)
-  const [left, setLeft] = useState(durationSeconds);
-
-  // prep timer
-  const [prepLeft, setPrepLeft] = useState(Math.max(0, prepSeconds));
-
-  // phase: 'prep' | 'playing' | 'answer' | 'finished' | 'error'
-  const [phase, setPhase] = useState(prepSeconds > 0 ? "prep" : "playing");
-
-  // audio state
-  const audioRef = useRef(null);
-  const [playing, setPlaying] = useState(false);
-  const [playedCount, setPlayedCount] = useState(0);
+  const [prepLeft, setPrepLeft] = useState(prepSeconds);
+  const [answerLeft, setAnswerLeft] = useState(durationSeconds);
   const [audioProgress, setAudioProgress] = useState(0);
-  const [sourceError, setSourceError] = useState(null);
+  const [isBlocked, setIsBlocked] = useState(false); 
+  
+  const audioRef = useRef(null);
 
-  // reset when segments or audio changes
+  const handleCanPlay = useCallback(() => {
+    if (status === "LOADING") setStatus("PREP");
+  }, [status]);
+
+  // AUTO-PLAY LOGIC
   useEffect(() => {
-    setValues(Array(blankCount).fill(""));
-    setLeft(durationSeconds);
-    setPrepLeft(Math.max(0, prepSeconds));
-    setPhase(prepSeconds > 0 ? "prep" : "playing");
-    setPlaying(false);
-    setAudioProgress(0);
-    setSourceError(null);
-    setPlayedCount(0);
+    let timer;
 
-    try {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
+    if (status === "PREP") {
+      if (prepLeft <= 0) {
+        setStatus("PLAYING");
+      } else {
+        timer = setTimeout(() => setPrepLeft((s) => s - 1), 1000);
       }
-    } catch (e) {}
-  }, [audioSrc, JSON.stringify(segments), durationSeconds, prepSeconds]);
-
-  // PREP countdown: when it reaches 0, attempt autoplay
-  useEffect(() => {
-    if (phase !== "prep") return;
-    if (prepLeft <= 0) {
-      attemptPlayOrStartAnswer();
-      return;
-    }
-    const t = setTimeout(() => setPrepLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, prepLeft]);
-
-  // Attach audio events
-  useEffect(() => {
-    const el = audioRef.current;
-    if (!el) return;
-
-    function onPlay() {
-      setPlaying(true);
-      setPlayedCount((c) => c + 1);
-      setPhase("playing");
-    }
-    function onPause() {
-      setPlaying(false);
-    }
-    function onTime() {
-      try {
-        if (el.duration && !isNaN(el.duration)) {
-          setAudioProgress((el.currentTime / el.duration) * 100);
-        }
-      } catch (e) {}
-    }
-    function onEnded() {
-      // audio finished -> start answer period
-      setPlaying(false);
-      setAudioProgress(100);
-      setPhase("answer");
-      setLeft(durationSeconds);
-    }
-    function onMeta() {
-      setSourceError(null);
-    }
-    function onErr() {
-      setSourceError("Failed to load audio. Check path or format.");
-      // If audio can't load, start answer period anyway
-      setPhase("answer");
-      setLeft(durationSeconds);
     }
 
-    el.addEventListener("play", onPlay);
-    el.addEventListener("pause", onPause);
-    el.addEventListener("ended", onEnded);
-    el.addEventListener("timeupdate", onTime);
-    el.addEventListener("loadedmetadata", onMeta);
-    el.addEventListener("error", onErr);
-
-    return () => {
-      el.removeEventListener("play", onPlay);
-      el.removeEventListener("pause", onPause);
-      el.removeEventListener("ended", onEnded);
-      el.removeEventListener("timeupdate", onTime);
-      el.removeEventListener("loadedmetadata", onMeta);
-      el.removeEventListener("error", onErr);
-    };
-  }, [audioSrc, durationSeconds]);
-
-  // Attempt autoplay, or if blocked, immediately start answer period
-  async function attemptPlayOrStartAnswer() {
-    const a = audioRef.current;
-    if (!audioSrc || !a) {
-      // no audio -> go straight to answer
-      setPhase("answer");
-      setLeft(durationSeconds);
-      return;
-    }
-
-    try {
-      // try to play from start
-      try {
-        a.currentTime = 0;
-      } catch {}
-      const p = a.play();
-      if (p && p.catch) {
-        await p.catch((err) => {
-          // autoplay blocked: start answer period anyway
-          console.warn("Autoplay blocked or failed:", err);
-          setSourceError("Autoplay blocked by browser. You may not hear audio automatically.");
-          setPhase("answer");
-          setLeft(durationSeconds);
+    if (status === "PLAYING" && audioRef.current) {
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((error) => {
+          console.error("Autoplay Blocked:", error);
+          setIsBlocked(true);
         });
       }
-    } catch (e) {
-      // If play throws, fallback to answer period
-      console.warn("Play failed:", e);
-      setSourceError("Audio autoplay failed.");
-      setPhase("answer");
-      setLeft(durationSeconds);
     }
-  }
 
-  // Answer countdown: only runs when phase === 'answer'
+    if (status === "ANSWER") {
+      if (answerLeft <= 0 || isSectionExpired) {
+        setStatus("FINISHED");
+      } else {
+        timer = setTimeout(() => setAnswerLeft((s) => s - 1), 1000);
+      }
+    }
+
+    return () => clearTimeout(timer);
+  }, [status, prepLeft, answerLeft, isSectionExpired]);
+
+  const handleAudioEnd = () => setStatus("ANSWER");
+
+  // --- LOGIC: ENABLE NEXT ONLY WHEN ALL FILLED ---
   useEffect(() => {
-    if (phase !== "answer") return;
-    if (left <= 0) {
-      setPhase("finished");
-      return;
+    // Save to store
+    setAnswerKey("answer", values.join("|"));
+
+    // Validation
+    const allFilled = values.length > 0 && values.every((val) => val.trim() !== "");
+
+    // Phase control
+    if (isSectionExpired || allFilled) {
+      setPhase("finished"); // Enables Next Button
+    } else {
+      setPhase("prep"); // Disables Next Button
     }
-    const t = setTimeout(() => setLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [phase, left]);
-
-  // update values
-  function updateValue(i, v) {
-    setValues((prev) => {
-      const next = [...prev];
-      next[i] = v;
-      return next;
-    });
-  }
-
-  // UI helpers
-  const timerProgress = useMemo(() => {
-    if (!durationSeconds) return 100;
-    const pct = phase === "answer" ? Math.round(((durationSeconds - left) / durationSeconds) * 100) : 0;
-    return pct;
-  }, [durationSeconds, left, phase]);
+  }, [values, isSectionExpired, setPhase, setAnswerKey]);
 
   return (
     <div className="space-y-6">
-      {/* Prep / status */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-sm">
-          <span className="font-medium">
-            {phase === "prep" && "Preparing..."}
-            {phase === "playing" && "Playing audio..."}
-            {phase === "answer" && "Answer now"}
-            {phase === "finished" && "Time's up"}
-            {phase === "error" && "Error"}
-          </span>
-          <span>
-            {phase === "prep" && `${prepLeft}s`}
-            {phase === "playing" && `${Math.round(audioProgress)}%`}
-            {phase === "answer" && `${left}s`}
-            {phase === "finished" && `0s`}
-          </span>
-        </div>
-        <Progress value={phase === "answer" ? timerProgress : Math.round(audioProgress)} />
+      <div className="flex justify-between items-center border-b pb-4">
+        <h2 className="text-xl font-bold text-gray-800 uppercase tracking-tight flex items-center gap-2">
+          <Headphones className="w-5 h-5 text-sky-600" /> {subsection}
+        </h2>
+        <SectionTimerDisplay formattedTime={formattedTime} isExpired={isSectionExpired} />
       </div>
 
-      {/* Hidden audio element (autoplayed after prep) */}
-      <audio ref={audioRef} src={audioSrc} preload="auto" />
+      {isBlocked && (
+        <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 animate-pulse">
+          <AlertCircle className="w-5 h-5" />
+          <p className="text-sm font-medium">
+            Audio blocked. Please click anywhere on the page to enable sound for this exam session.
+          </p>
+        </div>
+      )}
 
-      {/* Text with automatic blanks */}
-      <div className="rounded-lg border p-6 bg-white text-lg leading-relaxed">
+      {/* Status Card */}
+      <div className="bg-white rounded-xl border border-gray-200 p-8 shadow-sm flex flex-col items-center justify-center min-h-[140px] space-y-4">
+        {status === "PREP" && (
+          <div className="w-full max-w-sm text-center space-y-3">
+            <p className="text-sm font-black text-amber-500 uppercase tracking-widest">Starting in {prepLeft}s</p>
+            <Progress value={(prepLeft / prepSeconds) * 100} className="h-2 bg-amber-50" />
+          </div>
+        )}
+
+        {status === "PLAYING" && (
+          <div className="w-full max-w-sm space-y-3">
+            <div className="flex justify-between items-center text-sky-600 font-bold text-xs uppercase tracking-widest">
+              <span className="flex items-center gap-2"><Volume2 className="w-4 h-4 animate-bounce" /> Playing</span>
+              <span>{Math.round(audioProgress)}%</span>
+            </div>
+            <Progress value={audioProgress} className="h-2 bg-sky-50" />
+          </div>
+        )}
+
+        {(status === "ANSWER" || status === "FINISHED") && (
+          <div className="text-green-600 font-bold uppercase text-sm flex items-center gap-2 bg-green-50 px-6 py-2 rounded-full border border-green-100">
+            <PencilLine className="w-4 h-4" /> 
+            {status === "FINISHED" ? "Time Expired" : `Typing Phase: ${answerLeft}s`}
+          </div>
+        )}
+
+        <audio
+          ref={audioRef}
+          src={audioSrc}
+          onCanPlayThrough={handleCanPlay}
+          onTimeUpdate={() => {
+            if (audioRef.current) {
+               setAudioProgress((audioRef.current.currentTime / audioRef.current.duration) * 100);
+            }
+          }}
+          onEnded={handleAudioEnd}
+          className="hidden"
+          preload="auto"
+        />
+      </div>
+
+      {/* Main Text Area - Reverted to your original gray color scheme */}
+      <div className="rounded-3xl border border-gray-100 p-12 bg-white shadow-2xl text-xl leading-[4rem] text-gray-700">
         {segments.map((seg, i) => (
           <React.Fragment key={i}>
-            {seg}
-            {/* Create a blank after every segment except last */}
+            <span className="select-none">{seg}</span>
             {i < blankCount && (
               <input
                 type="text"
+                autoComplete="off"
                 value={values[i]}
-                onChange={(e) => updateValue(i, e.target.value)}
-                disabled={phase !== "answer" || left <= 0}
-                style={{
-                  display: "inline-block",
-                  minWidth: 120,
-                  border: "none",
-                  borderBottom: "2px solid #000",
-                  background: "transparent",
-                  margin: "0 6px",
-                  outline: "none",
+                onChange={(e) => {
+                  const next = [...values];
+                  next[i] = e.target.value;
+                  setValues(next);
                 }}
+                disabled={status === "LOADING" || status === "PREP" || isSectionExpired}
+                className="inline-block h-10 min-w-[160px] mx-2 px-4 align-middle text-center text-sky-600 font-bold border-b-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-sky-500 outline-none transition-all rounded"
+                placeholder={`${i + 1}`}
               />
             )}
           </React.Fragment>
         ))}
       </div>
-
-      {/* Optional inline hint about error or state */}
-      {sourceError && <div className="text-sm text-red-600">{sourceError}</div>}
-      {phase === "finished" && <div className="text-sm text-gray-600">Time finished — inputs disabled.</div>}
+      
+      {/* Help text */}
+      <div className="flex flex-col items-center gap-1 text-gray-400">
+         <p className="text-sm italic">Please fill all blanks to proceed.</p>
+         <p className="text-xs font-mono">{values.filter(v => v.trim() !== "").length} / {blankCount} filled</p>
+      </div>
     </div>
   );
 }

@@ -1,234 +1,200 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Progress } from "../ui/progress";
-import { Button } from "../ui/button";
+"use client";
+import { useEffect, useState, useMemo } from "react";
+import { useExamStore } from "@/store";
+import { useSectionTimer } from "../hooks/useSectionTimer";
+import SectionTimerDisplay from "../ui/SectionTimerDisplay";
 
-/**
- * segments: array of strings (sentence pieces). Placeholders exist between segments.
- * blanks: array of strings (options in the bottom bank).
- */
-const FillBlanksDragDrop = ({
-  segments = [],
-  blanks = [],
-  durationSeconds = 60,
-  onNext,
-}) => {
-  const [left, setLeft] = useState(durationSeconds);
+export default function FillBlanksDragDrop({
+  segments = "", // Raw text with "----"
+  options = [],  // Array of option objects
+  subsection = "Reading: Fill in the Blanks",
+  questionId
+}) {
+  const setPhase = useExamStore((s) => s.setPhase);
+  const setAnswerKey = useExamStore((s) => s.setAnswerKey);
 
+  // 1. LOCAL STATE
+  const [answers, setAnswers] = useState({}); // { 1: {id, text}, 2: {id, text} }
+
+  const { formattedTime, isExpired: isSectionExpired } = useSectionTimer();
+
+  // 2. PARSE PLAIN TEXT INTO BLANKS
+  // Splits text by "----". The resulting array will have text, then a blank, then text.
+  const textParts = useMemo(() => {
+    return segments.split(/----/g);
+  }, [segments]);
+
+  const totalBlanks = textParts.length - 1;
+
+  // 3. CALCULATE AVAILABLE OPTIONS
+  const availableOptions = useMemo(() => {
+    const usedIds = Object.values(answers).map((a) => a.id);
+    return options.filter((opt) => !usedIds.includes(opt.id));
+  }, [options, answers]);
+
+  const isAllFilled = useMemo(() => {
+    return Object.keys(answers).length === totalBlanks;
+  }, [answers, totalBlanks]);
+
+  // 4. SYNC TO GLOBAL STORE
   useEffect(() => {
-    if (left <= 0) {
-      // auto-advance when time is up
-      onNext?.();
-      return;
+    const formattedAnswers = Object.keys(answers).reduce((acc, key) => {
+      acc[key] = answers[key].id;
+      return acc;
+    }, {});
+
+    setAnswerKey("answer", formattedAnswers);
+
+    if (isSectionExpired || isAllFilled) {
+      setPhase("writing");
+    } else {
+      setPhase("prep");
     }
-    const t = setTimeout(() => setLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [left, onNext]);
+  }, [answers, isAllFilled, isSectionExpired, setAnswerKey, setPhase]);
 
-  // Represent bank items as objects with id + label so identical labels are still unique.
-  const initialBank = useMemo(
-    () => blanks.map((label, i) => ({ id: `b-${i}-${label}`, label })),
-    [blanks]
-  );
-  const [bank, setBank] = useState(initialBank);
-
-  // placeholders length = segments.length - 1
-  const placeholderCount = Math.max(0, segments.length - 1);
-  // placements: array of either null or { id, label }
-  const [placements, setPlacements] = useState(() =>
-    Array(placeholderCount).fill(null)
-  );
-
-  const progress = useMemo(() => {
-    if (durationSeconds <= 0) return 100;
-    return Math.round(((durationSeconds - left) / durationSeconds) * 100);
-  }, [durationSeconds, left]);
-
-  /* Drag start handlers:
-     - For bank items, send { type: 'bank', id }
-     - For placed items, send { type: 'placement', fromIndex, id }
-  */
-  const handleBankDragStart = (e, itemId) => {
-    e.dataTransfer.setData(
-      "text/plain",
-      JSON.stringify({ type: "bank", id: itemId })
-    );
-    e.dataTransfer.effectAllowed = "move";
+  // --- DRAG & DROP LOGIC ---
+  const onDragStart = (e, option, fromBlank = null) => {
+    e.dataTransfer.setData("option", JSON.stringify(option));
+    if (fromBlank) e.dataTransfer.setData("fromBlank", fromBlank);
   };
 
-  const handlePlacementDragStart = (e, fromIndex) => {
-    const item = placements[fromIndex];
-    if (!item) return;
-    e.dataTransfer.setData(
-      "text/plain",
-      JSON.stringify({ type: "placement", id: item.id, fromIndex })
-    );
-    e.dataTransfer.effectAllowed = "move";
-  };
-
-  const allowDrop = (e) => e.preventDefault();
-
-  /**
-   * Drop on placeholder (targetIndex)
-   * Cases:
-   *  - payload.type === 'bank'   => remove the bank item, put it in target, if target had something return it to bank
-   *  - payload.type === 'placement' => move item from fromIndex to target, if target had something return it to bank
-   *
-   * Implementation note: compute new arrays from current state and then set both states once each.
-   */
-  const handleDropOnPlaceholder = (e, targetIndex) => {
+  const onDropOnBlank = (e, targetBlankNumber) => {
     e.preventDefault();
-    const raw = e.dataTransfer.getData("text/plain");
-    if (!raw) return;
-    let payload;
-    try {
-      payload = JSON.parse(raw);
-    } catch {
-      return;
-    }
+    if (isSectionExpired) return;
 
-    // copy current arrays
-    const currBank = [...bank];
-    const currPlacements = [...placements];
+    const option = JSON.parse(e.dataTransfer.getData("option"));
+    const fromBlank = e.dataTransfer.getData("fromBlank");
 
-    if (payload.type === "bank") {
-      const bankIndex = currBank.findIndex((b) => b.id === payload.id);
-      if (bankIndex === -1) {
-        // item not present in bank (already used) — nothing to do
-        return;
-      }
-
-      const item = currBank.splice(bankIndex, 1)[0]; // remove from bank
-      const existing = currPlacements[targetIndex]; // may be null or object
-
-      // place the new item into target
-      currPlacements[targetIndex] = item;
-
-      // if there was an existing item, return it to the end of the bank
-      if (existing != null) {
-        currBank.push(existing);
-      }
-
-      // commit both states
-      setPlacements(currPlacements);
-      setBank(currBank);
-    } else if (payload.type === "placement") {
-      const { fromIndex } = payload;
-      if (typeof fromIndex !== "number") return;
-      if (fromIndex === targetIndex) return; // nothing to do if dropped in same slot
-
-      const moving = currPlacements[fromIndex];
-      if (!moving) return; // nothing to move
-
-      const existing = currPlacements[targetIndex]; // may be null or object
-
-      // move item into target and clear source
-      currPlacements[targetIndex] = moving;
-      currPlacements[fromIndex] = null;
-
-      // if target had an existing item, return it to bank
-      if (existing != null) {
-        currBank.push(existing);
-      }
-
-      setPlacements(currPlacements);
-      setBank(currBank);
-    }
+    setAnswers((prev) => {
+      const next = { ...prev };
+      if (fromBlank) delete next[fromBlank];
+      next[targetBlankNumber] = option;
+      return next;
+    });
   };
 
-  // Drop onto bank area: if dragging a placement item, return it to bank
-  const handleDropOnBank = (e) => {
+  const onDropOnPool = (e) => {
     e.preventDefault();
-    const raw = e.dataTransfer.getData("text/plain");
-    if (!raw) return;
-    let payload;
-    try {
-      payload = JSON.parse(raw);
-    } catch {
-      return;
+    const fromBlank = e.dataTransfer.getData("fromBlank");
+    if (fromBlank) {
+      setAnswers((prev) => {
+        const next = { ...prev };
+        delete next[fromBlank];
+        return next;
+      });
     }
-
-    if (payload.type === "placement") {
-      const { fromIndex } = payload;
-      if (typeof fromIndex !== "number") return;
-
-      const currBank = [...bank];
-      const currPlacements = [...placements];
-
-      const moving = currPlacements[fromIndex];
-      if (!moving) return;
-
-      currPlacements[fromIndex] = null;
-      currBank.push(moving);
-
-      setPlacements(currPlacements);
-      setBank(currBank);
-    }
-    // if payload.type === 'bank' and dropped to bank, no-op
   };
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-sm">
-          <div className="font-medium">Time remaining</div>
-          <div>{left}s</div>
-        </div>
-        <Progress value={progress} />
+      <div className="flex justify-between items-center border-b pb-4">
+        <h2 className="text-xl font-bold text-gray-800 tracking-tight uppercase">
+          {subsection}
+        </h2>
+        <SectionTimerDisplay formattedTime={formattedTime} isExpired={isSectionExpired} />
       </div>
 
-      {/* Top paragraph with inline placeholders */}
-      <div className="rounded-lg border border-gray-200 p-6 bg-gray-50 text-gray-900 leading-relaxed text-lg">
-        {segments.map((seg, idx) => (
-          <span key={`seg-${idx}`} className="inline">
-            {seg}
-            {idx !== segments.length - 1 && (
-              <span
-                className="inline-block align-baseline rounded bg-[#d9d9d933] h-[30px] border-[0.05px] border-[#0000004d] min-w-[80px] mx-1 px-1 text-center text-sm leading-[30px] select-none"
-                onDragOver={allowDrop}
-                onDrop={(e) => handleDropOnPlaceholder(e, idx)}
-              >
-                {placements[idx] ? (
-                  <span
-                    draggable
-                    onDragStart={(e) => handlePlacementDragStart(e, idx)}
-                    className="inline-block px-1 cursor-grab"
-                    title="Drag to move"
-                  >
-                    {placements[idx].label}
-                  </span>
-                ) : (
-                  <span className="opacity-40 text-xs">drop here</span>
-                )}
-              </span>
+      {/* TEXT AREA WITH DRAGGABLE BOXES */}
+      <div className="rounded-xl border border-gray-200 p-8 bg-white text-gray-900 text-lg leading-[3.5rem] shadow-sm">
+        {textParts.map((part, index) => (
+          <span key={index}>
+            <span className="whitespace-pre-wrap">{part}</span>
+            {index < totalBlanks && (
+              <DropTarget
+                blankNumber={index + 1}
+                filledValue={answers[index + 1]}
+                onDrop={onDropOnBlank}
+                onDragStart={onDragStart}
+                disabled={isSectionExpired}
+              />
             )}
           </span>
         ))}
       </div>
 
-      {/* Bank area */}
-      <div
-        className="rounded-lg border border-gray-200 p-6 bg-gray-50 text-gray-900 leading-relaxed text-lg flex flex-wrap gap-3 min-h-[64px]"
-        onDragOver={allowDrop}
-        onDrop={handleDropOnBank}
+      {/* OPTIONS POOL */}
+      <div 
+        className="p-6 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={onDropOnPool}
       >
-        {bank.length === 0 ? (
-          <div className="text-sm opacity-60">No available blanks</div>
-        ) : (
-          bank.map((item) => (
-            <span
-              key={item.id}
-              draggable
-              onDragStart={(e) => handleBankDragStart(e, item.id)}
-              className="border-[0.5px] py-2 px-4 rounded cursor-grab select-none bg-white"
-            >
-              {item.label}
-            </span>
-          ))
-        )}
+        <div className="text-[10px] font-bold text-slate-400 uppercase mb-4 tracking-widest text-center">
+          DRAG OPTIONS BELOW INTO THE BLANKS
+        </div>
+        <div className="flex flex-wrap gap-3 justify-center min-h-[60px]">
+          {availableOptions.map((opt) => (
+            <DraggableOption
+              key={opt.id}
+              option={opt}
+              onDragStart={(e) => onDragStart(e, opt)}
+              disabled={isSectionExpired}
+            />
+          ))}
+          {availableOptions.length === 0 && (
+            <div className="text-slate-400 text-sm italic py-4 animate-in fade-in">
+              All items have been placed
+            </div>
+          )}
+        </div>
       </div>
-      
+
+      {!isAllFilled && !isSectionExpired && (
+        <div className="text-amber-600 text-sm font-medium bg-amber-50 p-4 rounded-lg border border-amber-100 flex justify-center items-center gap-2 animate-in slide-in-from-bottom-2">
+          <span>⚠️</span> Complete the text by dragging all options to enable the Next button.
+        </div>
+      )}
     </div>
   );
-};
+}
 
-export default FillBlanksDragDrop;
+// --- SUB-COMPONENTS ---
+
+function DropTarget({ blankNumber, filledValue, onDrop, onDragStart, disabled }) {
+  const [isOver, setIsOver] = useState(false);
+
+  return (
+    <span
+      onDragOver={(e) => { e.preventDefault(); setIsOver(true); }}
+      onDragLeave={() => setIsOver(false)}
+      onDrop={(e) => { setIsOver(false); onDrop(e, blankNumber); }}
+      className={`
+        mx-2 inline-flex items-center justify-center align-middle
+        min-w-[140px] h-10 px-3 rounded-md border-2 transition-all duration-200
+        ${filledValue 
+          ? "bg-sky-600 border-sky-600 text-white font-medium shadow-md" 
+          : "bg-gray-50 border-gray-300 border-dashed"}
+        ${isOver ? "border-sky-500 bg-sky-100 scale-110" : ""}
+        ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-default"}
+      `}
+    >
+      {filledValue ? (
+        <span
+          draggable={!disabled}
+          onDragStart={(e) => onDragStart(e, filledValue, blankNumber)}
+          className="cursor-grab active:cursor-grabbing w-full text-center truncate"
+        >
+          {filledValue.option_text}
+        </span>
+      ) : (
+        <span className="text-gray-300 text-xs font-bold">DROP HERE</span>
+      )}
+    </span>
+  );
+}
+
+function DraggableOption({ option, onDragStart, disabled }) {
+  return (
+    <div
+      draggable={!disabled}
+      onDragStart={onDragStart}
+      className={`
+        px-5 py-2.5 bg-white border-2 border-gray-200 rounded-lg shadow-sm
+        text-base font-semibold text-gray-700 select-none
+        transition-all hover:border-sky-500 hover:shadow-sky-100 hover:shadow-lg
+        ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-grab active:cursor-grabbing active:scale-90 hover:-translate-y-1"}
+      `}
+    >
+      {option.option_text}
+    </div>
+  );
+}
