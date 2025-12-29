@@ -1,201 +1,162 @@
-import React, { useEffect, useRef, useState } from "react";
+"use client";
+import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { Progress } from "@/components/ui/progress";
-
-/**
- * AudioHighlightBox (auto-play after prepSeconds, no manual controls)
- *
- * Props:
- * - audioSrc (string) OR output (string) -> main audio path
- * - text (string) -> paragraph to show; each word becomes highlightable
- * - prepSeconds (number) -> wait this long (seconds) then autoplay main audio
- * - onNext (function) -> kept for compatibility but NOT called automatically by this component
- */
+import { Headphones, Volume2, CheckCircle2, AlertCircle } from "lucide-react";
+import { useExamStore } from "@/store"; // Ensure this path is correct for your project
+import { useSectionTimer } from "../hooks/useSectionTimer";
+import SectionTimerDisplay from "../ui/SectionTimerDisplay";
 
 export default function AudioHighlightBox({
   audioSrc,
   output,
   text = "",
-  prepSeconds = 0,
-  onNext,
+  prepSeconds = 5,
+  subsection = "Listening: Highlight Incorrect Words",
 }) {
+  // --- STORE HOOKS ---
+  const setPhase = useExamStore((s) => s.setPhase);
+  const setAnswerKey = useExamStore((s) => s.setAnswerKey);
+  const { formattedTime, isExpired: isSectionExpired } = useSectionTimer();
+
   const mainSrc = audioSrc || output || "";
   const audioRef = useRef(null);
 
-  const [phase, setPhase] = useState(prepSeconds > 0 ? "prep" : "idle"); // prep | playing | finished | error | idle
-  const [prepLeft, setPrepLeft] = useState(Math.max(0, prepSeconds));
-  const [playing, setPlaying] = useState(false);
-  const [playedCount, setPlayedCount] = useState(0);
+  // --- STATE ---
+  const [status, setStatus] = useState("LOADING"); // LOADING | PREP | PLAYING | FINISHED
+  const [prepLeft, setPrepLeft] = useState(prepSeconds);
   const [progress, setProgress] = useState(0);
   const [sourceError, setSourceError] = useState("");
-
-  // tokenize once per text change
-  const tokensRef = useRef(tokenize(text));
-  useEffect(() => {
-    tokensRef.current = tokenize(text);
-    // reset highlights on text change
-    setHighlighted(new Set());
-  }, [text]);
-
-  // highlighted indices (Set)
   const [highlighted, setHighlighted] = useState(new Set());
 
-  // reset when audio source changes
-  useEffect(() => {
-    setHighlighted(new Set());
-    setProgress(0);
-    setPlaying(false);
-    setPlayedCount(0);
-    setSourceError("");
-    setPhase(prepSeconds > 0 ? "prep" : "idle");
-    setPrepLeft(Math.max(0, prepSeconds));
+  // Tokenize the text once
+  const tokens = useMemo(() => tokenize(text), [text]);
 
+  // --- 1. MEDIA READINESS ---
+  const handleCanPlay = useCallback(() => {
+    if (status === "LOADING") setStatus("PREP");
+  }, [status]);
+
+  // --- 2. PREP TIMER & AUTOPLAY ---
+  useEffect(() => {
+    let timer;
+    if (status === "PREP") {
+      if (prepLeft <= 0) {
+        handleStartAudio();
+      } else {
+        timer = setTimeout(() => setPrepLeft((s) => s - 1), 1000);
+      }
+    }
+    return () => clearTimeout(timer);
+  }, [status, prepLeft]);
+
+  const handleStartAudio = async () => {
+    setStatus("PLAYING");
     if (audioRef.current) {
       try {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-      } catch (e) {}
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mainSrc]);
-
-  // prep countdown -> autoplay attempt
-  useEffect(() => {
-    if (phase !== "prep") return;
-    if (prepLeft <= 0) {
-      attemptAutoPlay();
-      return;
-    }
-    const t = setTimeout(() => setPrepLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [phase, prepLeft]); // eslint-disable-line
-
-  // attach audio listeners
-  useEffect(() => {
-    const el = audioRef.current;
-    if (!el) return;
-
-    function onPlay() {
-      setPlaying(true);
-      setPlayedCount((c) => c + 1);
-      setPhase("playing");
-    }
-    function onPauseOrEnded() {
-      setPlaying(false);
-      if (el.ended) setPhase("finished");
-    }
-    function onTime() {
-      try {
-        if (el.duration && !isNaN(el.duration)) {
-          setProgress((el.currentTime / el.duration) * 100);
-        }
-      } catch (e) {}
-    }
-    function onError() {
-      setSourceError("Audio failed to load or play.");
-      setPhase("error");
-    }
-
-    el.addEventListener("play", onPlay);
-    el.addEventListener("pause", onPauseOrEnded);
-    el.addEventListener("ended", onPauseOrEnded);
-    el.addEventListener("timeupdate", onTime);
-    el.addEventListener("error", onError);
-
-    return () => {
-      el.removeEventListener("play", onPlay);
-      el.removeEventListener("pause", onPauseOrEnded);
-      el.removeEventListener("ended", onPauseOrEnded);
-      el.removeEventListener("timeupdate", onTime);
-      el.removeEventListener("error", onError);
-    };
-  }, [mainSrc]);
-
-  async function attemptAutoPlay() {
-    const a = audioRef.current;
-    if (!mainSrc || !a) {
-      setSourceError("No audio source provided.");
-      setPhase("finished"); // allow user to highlight even if no audio
-      return;
-    }
-
-    try {
-      try {
-        a.currentTime = 0;
-      } catch {}
-      const p = a.play();
-      if (p && p.catch) {
-        await p.catch((err) => {
-          // Autoplay blocked — mark error and move to finished (so user can still highlight)
-          setSourceError("Autoplay blocked by browser.");
-          setPhase("finished");
-          throw err;
-        });
+        await audioRef.current.play();
+      } catch (err) {
+        console.warn("Autoplay blocked:", err);
+        setSourceError("Autoplay blocked. Click text to enable audio.");
       }
-    } catch (err) {
-      // Already handled above by setting sourceError and phase
-      console.warn("Autoplay attempt failed:", err);
     }
-  }
+  };
 
-  function toggleHighlight(idx) {
+  // --- 3. SYNC ANSWERS & NEXT BUTTON ---
+  useEffect(() => {
+    // Get actual word values from the indices stored in the Set
+    const selectedWords = Array.from(highlighted)
+      .map((idx) => tokens[idx].value)
+      .join(",");
+
+    setAnswerKey("answer", selectedWords);
+
+    // Requirement: Enable Next button only if at least one word is highlighted
+    if (isSectionExpired || highlighted.size > 0) {
+      setPhase("finished");
+    } else {
+      setPhase("prep");
+    }
+  }, [highlighted, isSectionExpired, setPhase, setAnswerKey, tokens]);
+
+  // --- 4. HIGHLIGHT LOGIC ---
+  const toggleHighlight = (idx) => {
+    // Disable interaction during preparation
+    if (status === "LOADING" || status === "PREP") return;
+
     setHighlighted((prev) => {
       const next = new Set(prev);
       if (next.has(idx)) next.delete(idx);
       else next.add(idx);
       return next;
     });
-  }
+  };
 
-  // The UI is minimal and automatic — no manual controls shown.
   return (
     <div className="space-y-6">
-      {/* Status / playback card (readonly) */}
-      <div className="rounded-lg border border-gray-200 p-4 bg-gray-50 text-gray-900">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="px-3 py-2 rounded-md font-medium shadow-sm bg-white border">
-              {phase === "prep"
-                ? `Preparing… (${prepLeft}s)`
-                : phase === "playing"
-                ? "Playing audio…"
-                : phase === "finished"
-                ? "Finished"
-                : phase === "error"
-                ? "Error"
-                : "Idle"}
-            </div>
-
-            <div className="text-sm text-gray-600">Plays: {playedCount}</div>
-          </div>
-
-          <div className="text-xs text-gray-600">
-            {phase === "playing"
-              ? `${Math.round(progress)}%`
-              : phase === "prep"
-              ? `${prepLeft}s`
-              : ""}
-          </div>
+      {/* Header Section */}
+      <div className="flex justify-between items-center border-b pb-4">
+        <div className="flex items-center gap-2 text-sky-700">
+          <Headphones className="w-5 h-5" />
+          <h2 className="text-xl font-bold uppercase tracking-tight">{subsection}</h2>
         </div>
-
-        <div className="mt-3">
-          <Progress value={Math.round(phase === "playing" ? progress : 0)} />
-        </div>
-
-        {sourceError && <div className="mt-2 text-xs text-red-600">{sourceError}</div>}
+        <SectionTimerDisplay formattedTime={formattedTime} isExpired={isSectionExpired} />
       </div>
 
-      {/* Hidden audio element (autoplayed) */}
-      <audio ref={audioRef} src={mainSrc} preload="auto" />
+      {/* Playback Status Card */}
+      <div className="bg-white rounded-xl border border-gray-200 p-8 shadow-sm flex flex-col items-center justify-center min-h-[140px] space-y-4">
+        {status === "PREP" && (
+          <div className="w-full max-w-md text-center space-y-3">
+            <p className="text-sm font-black text-amber-500 uppercase tracking-widest">
+              Audio starting in {prepLeft}s
+            </p>
+            <Progress value={(prepLeft / prepSeconds) * 100} className="h-2 bg-amber-50" />
+          </div>
+        )}
 
-      {/* Paragraph with highlightable words */}
-      <div className="rounded-lg border border-gray-200 p-6 bg-white text-gray-900 leading-relaxed text-lg">
-        {tokensRef.current.map((t, idx) => {
-          if (!t.isWord) {
-            return (
-              <span key={idx} aria-hidden>
-                {t.value}
+        {status === "PLAYING" && (
+          <div className="w-full max-w-md space-y-3">
+            <div className="flex justify-between items-center text-sky-600 font-bold text-xs uppercase tracking-widest">
+              <span className="flex items-center gap-2">
+                <Volume2 className="h-4 w-4 animate-bounce" /> Status: Playing
               </span>
-            );
+              <span>{Math.round(progress)}%</span>
+            </div>
+            <Progress value={progress} className="h-2 bg-sky-50" />
+          </div>
+        )}
+
+        {(status === "FINISHED" || isSectionExpired) && (
+          <div className="flex items-center gap-2 text-green-600 bg-green-50 px-6 py-2 rounded-full border border-green-100">
+            <CheckCircle2 className="h-4 w-4" />
+            <span className="text-xs font-bold uppercase tracking-widest">Listening Phase Complete</span>
+          </div>
+        )}
+
+        {sourceError && (
+          <div className="flex items-center gap-2 text-red-500 text-xs font-medium">
+            <AlertCircle className="h-3 w-3" /> {sourceError}
+          </div>
+        )}
+
+        <audio
+          ref={audioRef}
+          src={mainSrc}
+          onCanPlayThrough={handleCanPlay}
+          onTimeUpdate={() => {
+            const el = audioRef.current;
+            if (el && el.duration) setProgress((el.currentTime / el.duration) * 100);
+          }}
+          onEnded={() => setStatus("FINISHED")}
+          className="hidden"
+          preload="auto"
+        />
+      </div>
+
+      {/* Paragraph Content */}
+      <div className="rounded-3xl border border-gray-100 p-10 bg-white shadow-2xl text-gray-800 leading-[3.5rem] text-xl">
+        {tokens.map((t, idx) => {
+          if (!t.isWord) {
+            return <span key={idx}>{t.value}</span>;
           }
           const isHighlighted = highlighted.has(idx);
           return (
@@ -203,16 +164,12 @@ export default function AudioHighlightBox({
               key={idx}
               type="button"
               onClick={() => toggleHighlight(idx)}
-              className={`inline-block mr-1 mb-0.5 text-left leading-tight px-1 py-0.5 rounded-sm focus:outline-none ${
-                isHighlighted ? "bg-yellow-300" : "bg-transparent"
-              }`}
-              style={{
-                border: "none",
-                background: isHighlighted ? "rgba(250,204,21,0.35)" : "transparent",
-                cursor: "pointer",
-              }}
-              aria-pressed={isHighlighted}
-              title={isHighlighted ? "Unhighlight" : "Highlight"}
+              disabled={status === "PREP" || status === "LOADING"}
+              className={`
+                inline-block px-1 rounded transition-all duration-200
+                ${isHighlighted ? "bg-yellow-300 text-black shadow-sm" : "bg-transparent hover:bg-gray-100"}
+                ${(status === "PREP" || status === "LOADING") ? "cursor-not-allowed opacity-50" : "cursor-pointer"}
+              `}
             >
               {t.value}
             </button>
@@ -220,16 +177,18 @@ export default function AudioHighlightBox({
         })}
       </div>
 
-      {/* Note: no manual buttons (Submit/Clear/Next) shown here. */}
+      <p className="text-center text-sm font-medium text-gray-400 italic">
+        * Select the words in the text that differ from what is said. 
+        <br /> You must highlight at least one word to enable the Next button.
+      </p>
     </div>
   );
 }
 
-/* ---- helper tokenizer ---- */
+/* ---- Tokenizer Helper ---- */
 function tokenize(str) {
   if (!str) return [];
-  const regex =
-    /([A-Za-z0-9\u00C0-\u017F'\-]+)|(\s+|[^\sA-Za-z0-9\u00C0-\u017F'\-]+)/g;
+  const regex = /([A-Za-z0-9\u00C0-\u017F'\-]+)|(\s+|[^\sA-Za-z0-9\u00C0-\u017F'\-]+)/g;
   const tokens = [];
   let m;
   while ((m = regex.exec(str)) !== null) {

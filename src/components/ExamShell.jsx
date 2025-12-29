@@ -25,6 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import FillBlanksDragDrop from "./questions/FillBlanksDragDrop";
 import SummarizeTheText from "./questions/SummarizeTheText";
+import ExamCompleteScreen from "./ui/ExamCompleteScreen";
 
 export default function ExamShell({ mocktestList }) {
   const {
@@ -42,6 +43,7 @@ export default function ExamShell({ mocktestList }) {
     setRemainingTime,
     setStopSignal,
     questionSection,
+    resetAnswer
   } = useExamStore();
 
   const [currentQuestion, setCurrentQuestion] = useState(null);
@@ -164,6 +166,7 @@ export default function ExamShell({ mocktestList }) {
       // doesn't inherit the OLD answer/audio.
       setAnswerKey("answer", {});
       setAnswerKey("answer_audio", null);
+      resetAnswer();
 
       if (nextQuestionUrl) {
         // Adding a tiny delay here ensures the backend has
@@ -354,6 +357,7 @@ function renderQuestionComponent(q, onNext) {
 
     // --- Listening ---
     case "summarize_spoken_text":
+    case "write_from_dictation":
       return (
         <SummarizeTheText
           key={id}
@@ -390,12 +394,12 @@ function renderQuestionComponent(q, onNext) {
         />
       );
 
-    case "highlight-incorrect-words":
+    case "highlight_incorrect_words":
       return (
         <AudioHighlightBox
           key={id}
-          audioSrc={q.output}
-          text={q.prompt}
+          audioSrc={q.audio}
+          text={q.text}
           onNext={onNext}
         />
       );
