@@ -1,26 +1,37 @@
 "use client";
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useExamStore } from "@/store";
+
+// --- Timer Hooks & UI Components ---
+import { useSectionTimer } from "../hooks/useSectionTimer";
+import SectionTimerDisplay from "../ui/SectionTimerDisplay";
 
 /**
  * MultipleChoiceSingle
+ * - Integrated with Global Section Timer
  * - Parses a single string to extract paragraph and question text
- * - Syncs with useExamStore for answer submission and phase management
+ * - Disables interaction and updates phase when time expires
  */
 export default function MultipleChoiceSingle({
-  paragraphs = "", // Now a plain string
-  options = [],    // Expected array of objects: [{id, option_text}, ...]
+  paragraphs = "", // Plain string
+  options = [],    // [{id, option_text}, ...]
   subsection,
   questionId,
+  name = "Multiple Choice (Single)"
 }) {
   const setPhase = useExamStore((s) => s.setPhase);
   const setAnswerKey = useExamStore((s) => s.setAnswerKey);
   
   const [selectedId, setSelectedId] = useState(null);
 
-  // --- PARSING LOGIC ---
-  // Split the string by "Question:". 
-  // part[0] is the text, part[1] is the question.
+  // --- 1. Timer Integration ---
+  const handleTimeExpired = useCallback(() => {
+    console.log("Section time expired in Multiple Choice Single.");
+  }, []);
+
+  const { formattedTime, isExpired } = useSectionTimer(handleTimeExpired);
+
+  // --- 2. Parsing Logic ---
   const { contentText, questionLabel } = useMemo(() => {
     if (!paragraphs.includes("Question:")) {
       return { contentText: paragraphs, questionLabel: "Select the correct option:" };
@@ -32,29 +43,38 @@ export default function MultipleChoiceSingle({
     };
   }, [paragraphs]);
 
-  // --- SYNC TO STORE ---
+  // --- 3. Sync to Store & Phase Management ---
   useEffect(() => {
+    // Save current selection to global store
     if (selectedId !== null) {
-      // Save the ID to the global answer key
       setAnswerKey("answer", selectedId);
-      // Enable the Next button
+    }
+
+    // Phase control: Enable 'Next' if an answer is chosen OR if time expired
+    if (isExpired) {
+      setPhase("finished");
+    } else if (selectedId !== null) {
       setPhase("finished");
     } else {
       setPhase("prep");
     }
-  }, [selectedId, setAnswerKey, setPhase]);
+  }, [selectedId, setAnswerKey, setPhase, isExpired]);
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header with Global Timer Display */}
       <div className="flex justify-between items-center border-b pb-4">
         <h2 className="text-xl font-bold text-gray-800 uppercase">
-          {subsection || "Multiple Choice (Single)"}
+          {subsection || name}
         </h2>
+        <SectionTimerDisplay
+          formattedTime={formattedTime}
+          isExpired={isExpired}
+        />
       </div>
 
       {/* Main Reading Text */}
-      <div className="rounded-xl border border-gray-200 p-8 bg-white text-gray-900 leading-relaxed shadow-sm">
+      <div className={`rounded-xl border border-gray-200 p-8 bg-white text-gray-900 leading-relaxed shadow-sm transition-opacity duration-300 ${isExpired ? "opacity-60" : ""}`}>
         <p className="text-lg whitespace-pre-wrap">
           {contentText}
         </p>
@@ -66,13 +86,14 @@ export default function MultipleChoiceSingle({
           {questionLabel}
         </div>
 
-        <div className="grid gap-3">
+        <div className={`grid gap-3 ${isExpired ? "pointer-events-none" : ""}`}>
           {options.map((opt) => {
             const isChecked = selectedId === opt.id;
             return (
               <label
                 key={opt.id}
-                className={`flex items-start gap-4 rounded-xl border-2 p-4 cursor-pointer transition-all duration-200
+                className={`flex items-start gap-4 rounded-xl border-2 p-4 transition-all duration-200
+                  ${isExpired ? "cursor-not-allowed" : "cursor-pointer"}
                   ${isChecked 
                     ? "border-sky-600 bg-sky-50 shadow-md translate-x-1" 
                     : "border-gray-100 bg-white hover:border-sky-200 hover:bg-gray-50"}`}
@@ -81,8 +102,9 @@ export default function MultipleChoiceSingle({
                   <input
                     type="radio"
                     name="mcq-single"
-                    className="h-5 w-5 cursor-pointer accent-sky-600"
+                    className="h-5 w-5 cursor-pointer accent-sky-600 disabled:cursor-not-allowed"
                     checked={isChecked}
+                    disabled={isExpired}
                     onChange={() => setSelectedId(opt.id)}
                   />
                 </div>
@@ -95,11 +117,17 @@ export default function MultipleChoiceSingle({
         </div>
       </div>
 
-      {/* Status Warning */}
-      {selectedId === null && (
-        <div className="text-center py-2 text-sm text-amber-600 font-medium bg-amber-50 rounded-lg animate-pulse">
-          Please select an answer to continue.
+      {/* Status Messaging */}
+      {isExpired ? (
+        <div className="text-center py-3 text-sm text-red-600 font-bold bg-red-50 rounded-lg border border-red-100 animate-pulse">
+          ⏳ Section time has expired. Your current selection is locked.
         </div>
+      ) : (
+        selectedId === null && (
+          <div className="text-center py-2 text-sm text-amber-600 font-medium bg-amber-50 rounded-lg animate-pulse border border-amber-100">
+            Please select an answer to continue.
+          </div>
+        )
       )}
     </div>
   );

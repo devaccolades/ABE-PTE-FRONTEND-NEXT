@@ -34,6 +34,7 @@ export default function RetellLecture({
     const specialTypes = [
       "summarise_group_discussion",
       "respond_to_a_situation",
+      "retell_lecture",
     ];
     return specialTypes.includes(subsection) ? 10 : 0;
   }, [subsection]);
