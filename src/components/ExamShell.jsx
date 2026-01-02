@@ -79,6 +79,9 @@ export default function ExamShell({ mocktestList }) {
         // --- FIX ENDS HERE ---
 
         setCurrentQuestion(q);
+        setQuestionSection(q.mocktest_section.section_name);
+        console.log("current Question", q.mocktest_section.section_name);
+        console.log("current Question", questionSection);
         console.log("current Question", q);
         console.log("next Question URL", data.next);
         console.log("remain time from shell", remainingTime);
@@ -89,6 +92,7 @@ export default function ExamShell({ mocktestList }) {
         // localStorage.setItem("remaining_time", remainingTime);
 
         if (q.mocktest_section.section_name !== questionSection) {
+          console.log("entered the section ");
           setQuestionSection(q.mocktest_section.section_name);
           setQuestionTimer(q.mocktest_section.total_duration);
           setRemainingTime(q.mocktest_section.total_duration);
@@ -311,20 +315,21 @@ function renderQuestionComponent(q, onNext) {
           key={id}
           promptText={q.text}
           durationSeconds={q.reading_time}
+          subsection={sub}
           onNext={onNext}
         />
       );
 
-    case "audio-to-text":
-    case "Write-from-Dictation":
-      return (
-        <SummerizeTheEssay
-          key={id}
-          output={q.output}
-          prepSeconds={q.prepSeconds}
-          onNext={onNext}
-        />
-      );
+    // case "audio_to_text":
+    // case "write_from_dictation":
+    // return (
+    //   <SummerizeTheEssay
+    //     key={id}
+    //     output={q.audio}
+    //     prepSeconds={q.prepSeconds}
+    //     onNext={onNext}
+    //   />
+    // );
 
     // --- Reading ---
     case "fib_dropdown":
@@ -460,6 +465,10 @@ function titleFor(sub) {
     summarise_group_discussion: "Speaking: Summarize Group Discussion",
     summarize_written_text: "Writing: Summarize Written Text",
     write_essay: "Writing: Essay",
+    mc_multiple: "Multiple Choice Multiple Answers",
+    fib_drag_drop: "Fill in the blanks Drag and Drop",
+    reorder_paragraphs: "Reorder Paragraphs",
+    mc_single: "Multiple Choice Single Answer",
     fib_dropdown: "Reading: Fill in the Blanks",
     retell_lecture: "Speaking: Retell Lecture",
     repeat_sentence: "Speaking: Repeat Sentence",
@@ -467,6 +476,14 @@ function titleFor(sub) {
     "mcq-single": "Reading: Multiple Choice (Single)",
     "reorder-paragraphs": "Reading: Reorder Paragraphs",
     "Write-from-Dictation": "Listening: Write from Dictation",
+    "summarize-spoken-text": "Listening: Summarize Spoken Text",
+    write_from_dictation: "Write From Dictation",
+    l_mc_multiple: "Multiple Choice Multiple Answers",
+    highlight_correct_summary: "Highlight Correct Summary ",
+    l_mc_single: "Multiple Choice Single Answer",
+    select_missing_word: "Select Missing Word",
+    l_fill_in_blanks: "Listening Fill in the Blanks",
+    highlight_incorrect_words: "Highlight Incorrect Words",
   };
   return map[sub] || "Mock Test Question";
 }

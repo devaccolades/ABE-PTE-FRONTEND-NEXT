@@ -36,7 +36,9 @@ export default function DescribeImage({
     // Logic for ending the whole section is handled via isExpired effect below
   }, [stopAudio]);
 
-  const { formattedTime, isExpired: isSectionExpired } = useSectionTimer(handleSectionTimeExpired);
+  const { formattedTime, isExpired: isSectionExpired } = useSectionTimer(
+    handleSectionTimeExpired
+  );
 
   // --- 3. Sequential Timer Hook (Local) ---
   const timerHook = useSequentialTimer(
@@ -63,13 +65,7 @@ export default function DescribeImage({
     }
   );
 
-  const {
-    phase,
-    prepLeft,
-    recLeft,
-    prepProgress,
-    recProgress,
-  } = timerHook;
+  const { phase, prepLeft, recLeft, prepProgress, recProgress } = timerHook;
 
   // --- 4. Effects ---
 
@@ -108,21 +104,20 @@ export default function DescribeImage({
         <h2 className="text-xl font-bold text-gray-800 uppercase tracking-tight">
           {subsection}
         </h2>
-        <SectionTimerDisplay 
-          formattedTime={formattedTime} 
-          isExpired={isSectionExpired} 
+        <SectionTimerDisplay
+          formattedTime={formattedTime}
+          isExpired={isSectionExpired}
         />
       </div>
 
       {/* Image Display */}
       <div className="border-2 border-gray-100 rounded-xl overflow-hidden shadow-sm flex justify-center bg-white p-2">
-        <Image
+        <img
           src={imageUrl}
           alt="Describe visual"
           width={600}
           height={400}
           className="max-h-80 w-auto object-contain transition-all hover:scale-[1.01]"
-          priority
         />
       </div>
 
@@ -143,7 +138,8 @@ export default function DescribeImage({
       )}
 
       <div className="text-center text-xs text-gray-400 italic">
-        {phase === PHASES.PREP && "Look at the image and prepare your description."}
+        {phase === PHASES.PREP &&
+          "Look at the image and prepare your description."}
         {phase === PHASES.RECORDING && "Recording... describe the image now."}
       </div>
     </div>

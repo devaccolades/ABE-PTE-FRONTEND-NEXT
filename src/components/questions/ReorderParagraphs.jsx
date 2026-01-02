@@ -1,15 +1,28 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useExamStore } from "@/store";
 
+// --- Timer Hooks & UI ---
+import { useSectionTimer } from "../hooks/useSectionTimer";
+import SectionTimerDisplay from "../ui/SectionTimerDisplay";
+
 export default function ReorderParagraphs({
-  items = [], // [{ id, text, label? }]
+  items = [],
   subsection,
-  questionId, // Ensure you pass the questionId to map the answer correctly
+  name = "Reorder Paragraphs",
 }) {
   const setGlobalPhase = useExamStore((s) => s.setPhase);
   const setAnswerKey = useExamStore((s) => s.setAnswerKey);
 
+  // --- 1. Timer Logic ---
+  // This hook handles the sync between LocalStorage and the Global Store
+  const handleTimeExpired = useCallback(() => {
+    console.log("Section time expired. Locking Reorder Paragraphs.");
+  }, []);
+
+  const { formattedTime, isExpired } = useSectionTimer(handleTimeExpired);
+
+  // --- 2. Initial Data Setup ---
   const initialSource = useMemo(
     () =>
       items.map((it, i) => ({
@@ -23,37 +36,44 @@ export default function ReorderParagraphs({
   const [source, setSource] = useState(initialSource);
   const [target, setTarget] = useState([]);
 
-  // --- Logic: Sync Answer and Next Button ---
+  // --- 3. Sync Answer and Global Phase ---
   useEffect(() => {
-    if (source.length === 0 && target.length > 0) {
-      // 1. Create the position mapping (Position : ID)
-      // Result format: { "1": "15", "2": "12", ... }
-      const answerMapping = target.reduce((acc, item, index) => {
-        acc[index + 1] = item.id;
-        return acc;
-      }, {});
+    // We always save the current target arrangement, even if incomplete
+    const answerMapping = target.reduce((acc, item, index) => {
+      acc[index + 1] = item.id;
+      return acc;
+    }, {});
 
-      // 2. Save to global store
-      setAnswerKey(questionId, answerMapping);
-      console.log("answer order", questionId, answerMapping);
+    setAnswerKey("answer", answerMapping);
 
-      // 3. Enable Next Button
+    // If time is up, phase is finished. 
+    // Otherwise, check if all items are moved to the target box.
+    if (isExpired) {
+      setGlobalPhase("finished");
+    } else if (source.length === 0 && target.length > 0) {
       setGlobalPhase("finished");
     } else {
       setGlobalPhase("prep");
     }
-  }, [source, target, setGlobalPhase, setAnswerKey, questionId]);
+  }, [source, target, setGlobalPhase, setAnswerKey, isExpired]);
 
-  // Drag-n-drop handlers
+  // --- 4. Drag-n-drop Handlers (Respect isExpired) ---
   function onDragStart(e, payload) {
+    if (isExpired) {
+      e.preventDefault();
+      return;
+    }
     e.dataTransfer.setData("application/json", JSON.stringify(payload));
     e.dataTransfer.effectAllowed = "move";
   }
 
   function onDropToSource(e) {
     e.preventDefault();
+    if (isExpired) return;
+
     const data = safeParse(e.dataTransfer.getData("application/json"));
     if (!data) return;
+
     if (data.from === "target") {
       setTarget((t) => t.filter((x) => x.id !== data.item.id));
       setSource((s) => [...s, data.item]);
@@ -63,6 +83,7 @@ export default function ReorderParagraphs({
   function onDropToTargetAtPosition(e, position) {
     e.preventDefault();
     e.stopPropagation();
+    if (isExpired) return;
 
     const data = safeParse(e.dataTransfer.getData("application/json"));
     if (!data) return;
@@ -94,38 +115,52 @@ export default function ReorderParagraphs({
 
   return (
     <div className="space-y-6">
+      {/* HEADER SECTION */}
       <div className="flex justify-between items-center border-b pb-4">
         <h2 className="text-xl font-bold text-gray-800 uppercase">
-          {subsection?.replace(/_/g, " ") || "Reorder Paragraphs"}
+          {subsection?.replace(/_/g, " ") || name}
         </h2>
+        <SectionTimerDisplay
+          formattedTime={formattedTime}
+          isExpired={isExpired}
+        />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* DRAG AND DROP AREA */}
+      <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 transition-all ${isExpired ? "opacity-60 grayscale-[0.5]" : ""}`}>
         <Column
           title="Source"
           items={source}
           onDropContainer={onDropToSource}
           onDragStart={onDragStart}
+          isExpired={isExpired}
         />
         <Column
           title="Target"
           items={target}
           onDropAtPosition={onDropToTargetAtPosition}
           onDragStart={onDragStart}
+          isExpired={isExpired}
         />
       </div>
 
-      {source.length > 0 && (
-        <p className="text-sm text-amber-600 font-medium animate-pulse text-center bg-amber-50 py-2 rounded-lg border border-amber-100">
-          ⚠️ Move all paragraphs to the Target box to save your answer.
-        </p>
+      {/* STATUS MESSAGES */}
+      {isExpired ? (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-center font-bold animate-pulse">
+          ⏳ Section time has expired. You can no longer rearrange these items.
+        </div>
+      ) : (
+        source.length > 0 && (
+          <p className="text-sm text-amber-600 font-medium animate-pulse text-center bg-amber-50 py-2 rounded-lg border border-amber-100">
+            ⚠️ Move all paragraphs to the Target box to save your answer.
+          </p>
+        )
       )}
     </div>
   );
 }
 
-// ... Column, DraggableCard, and DropZone components remain same as previous response ...
-// (Ensure they are included below in your actual file)
+// --- SUB-COMPONENTS ---
 
 function Column({
   title,
@@ -133,19 +168,20 @@ function Column({
   onDropContainer,
   onDropAtPosition,
   onDragStart,
+  isExpired
 }) {
   const isSource = title.toLowerCase() === "source";
   return (
     <div
-      className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 h-[500px] flex flex-col"
-      onDragOver={isSource ? (e) => e.preventDefault() : undefined}
-      onDrop={isSource ? onDropContainer : undefined}
+      className={`rounded-xl border border-gray-200 bg-white shadow-sm p-4 h-[500px] flex flex-col ${isExpired ? "cursor-not-allowed" : ""}`}
+      onDragOver={isSource && !isExpired ? (e) => e.preventDefault() : undefined}
+      onDrop={isSource && !isExpired ? onDropContainer : undefined}
     >
       <div className="text-sm font-bold text-gray-700 mb-3 uppercase border-b pb-2">
         {title}
       </div>
-      <div className="flex-1 overflow-y-auto space-y-2">
-        {!isSource && (
+      <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar">
+        {!isSource && !isExpired && (
           <DropZone
             onDrop={(e) => onDropAtPosition?.(e, 0)}
             label={items.length === 0 ? "Drop here" : "Place at top"}
@@ -157,15 +193,16 @@ function Column({
               item={item}
               origin={title.toLowerCase()}
               onDragStart={onDragStart}
+              isExpired={isExpired}
             />
-            {!isSource && (
+            {!isSource && !isExpired && (
               <DropZone onDrop={(e) => onDropAtPosition?.(e, idx + 1)} />
             )}
           </div>
         ))}
         {items.length === 0 && isSource && (
           <div className="flex flex-col items-center justify-center h-full text-gray-400 py-12">
-            <span className="text-sm italic">All items moved</span>
+            <span className="text-sm italic text-gray-300">All items moved</span>
           </div>
         )}
       </div>
@@ -173,15 +210,19 @@ function Column({
   );
 }
 
-function DraggableCard({ item, origin, onDragStart }) {
+function DraggableCard({ item, origin, onDragStart, isExpired }) {
   return (
     <div
-      className="rounded-lg border border-gray-200 bg-gray-50 p-4 cursor-grab active:cursor-grabbing select-none hover:border-sky-400 transition-all shadow-sm"
-      draggable
+      className={`rounded-lg border border-gray-200 bg-gray-50 p-4 shadow-sm select-none transition-all ${
+        isExpired 
+          ? "opacity-80 cursor-not-allowed" 
+          : "cursor-grab active:cursor-grabbing hover:border-sky-400 hover:bg-white"
+      }`}
+      draggable={!isExpired}
       onDragStart={(e) => onDragStart(e, { from: origin, item })}
     >
       <div className="flex items-start gap-4">
-        <div className="h-7 w-7 shrink-0 rounded-full bg-sky-600 text-white grid place-items-center text-xs font-bold">
+        <div className={`h-7 w-7 shrink-0 rounded-full text-white grid place-items-center text-xs font-bold ${isExpired ? "bg-gray-400" : "bg-sky-600"}`}>
           {item.label}
         </div>
         <div className="text-[15px] text-gray-800 leading-relaxed font-medium">
@@ -196,8 +237,8 @@ function DropZone({ onDrop, label = "" }) {
   const [over, setOver] = useState(false);
   return (
     <div
-      className={`h-10 rounded-lg border-2 border-dashed transition-all ${
-        over ? "border-sky-500 bg-sky-50 h-14" : "border-gray-200 opacity-40"
+      className={`h-10 rounded-lg border-2 border-dashed transition-all flex items-center justify-center ${
+        over ? "border-sky-500 bg-sky-50 h-14" : "border-gray-100 opacity-40"
       }`}
       onDragOver={(e) => {
         e.preventDefault();
@@ -211,13 +252,15 @@ function DropZone({ onDrop, label = "" }) {
       }}
     >
       {label && (
-        <span className="text-[11px] font-bold text-gray-500 uppercase">
+        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
           {label}
         </span>
       )}
     </div>
   );
 }
+
+// --- HELPERS ---
 
 function indexToLabel(i) {
   let n = i;
