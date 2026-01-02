@@ -1,59 +1,51 @@
-// src/hooks/useSectionTimer.js
 import { useState, useEffect, useRef } from "react";
 import { useExamStore } from "@/store";
 
 export function useSectionTimer(onTimeExpired) {
-  // 1. Get Global State
-  const remainingTime = useExamStore((s) => s.remainingTime);
-  const setRemainingTime = useExamStore((s) => s.setRemainingTime);
+  const setGlobalRemainingTime = useExamStore((s) => s.setRemainingTime);
+  
+  // 1. Get initial time: Try LocalStorage first, then Store, then fallback to 1800
+  const getInitialTime = () => {
+    const saved = localStorage.getItem("section_time_left");
+    if (saved !== null) return parseInt(saved, 10);
+    return useExamStore.getState().remainingTime || 1800;
+  };
 
-  // 2. Local State for smooth rendering
-  const [timeLeft, setTimeLeft] = useState(remainingTime);
-
-  // 3. Ref to track time for cleanup (avoids stale closures)
-  const timeLeftRef = useRef(remainingTime);
+  const [timeLeft, setTimeLeft] = useState(getInitialTime);
+  const timeLeftRef = useRef(getInitialTime());
 
   useEffect(() => {
-    // If time is already 0, expire immediately
-    if (remainingTime <= 0) {
-      if (onTimeExpired) onTimeExpired();
-      return;
-    }
-
-    // Update ref and local state
-    timeLeftRef.current = remainingTime;
-    setTimeLeft(remainingTime);
-
-    // Start Interval
+    // 2. Continuous Countdown
     const intervalId = setInterval(() => {
       setTimeLeft((prev) => {
-        const newValue = prev - 1;
-        timeLeftRef.current = newValue; // Update ref for cleanup logic
-
-        // CHECK FOR TIMEOUT
-        if (newValue <= 0) {
+        const nextValue = prev - 1;
+        
+        if (nextValue <= 0) {
           clearInterval(intervalId);
-          setRemainingTime(0); // Sync global 0
-          if (onTimeExpired) onTimeExpired(); // Trigger Force Stop
+          localStorage.setItem("section_time_left", "0");
+          setGlobalRemainingTime(0);
+          if (onTimeExpired) onTimeExpired();
           return 0;
         }
-        return newValue;
+
+        // 3. Update Ref and LocalStorage every second for maximum persistence
+        timeLeftRef.current = nextValue;
+        localStorage.setItem("section_time_left", nextValue.toString());
+        return nextValue;
       });
     }, 1000);
 
-    // CLEANUP: Runs when component unmounts (e.g., User clicks "Next")
     return () => {
       clearInterval(intervalId);
-      // Save the exact time left back to global store for the next component
-      setRemainingTime(timeLeftRef.current);
+      // 4. Save to global store on exit
+      setGlobalRemainingTime(timeLeftRef.current);
     };
-  }, []); // Run once on mount
+  }, [setGlobalRemainingTime, onTimeExpired]);
 
-  // Helper to format MM:SS
   const formatTime = (seconds) => {
-    if (seconds < 0) return "00:00";
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
+    const total = Math.max(0, seconds);
+    const m = Math.floor(total / 60);
+    const s = Math.floor(total % 60);
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   };
 
