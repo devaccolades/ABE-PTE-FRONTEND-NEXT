@@ -41,9 +41,10 @@ export default function ExamShell({ mocktestList }) {
     setQuestionSection,
     setQuestionTimer,
     setRemainingTime,
+    remainingTime,
     setStopSignal,
     questionSection,
-    resetAnswer
+    resetAnswer,
   } = useExamStore();
 
   const [currentQuestion, setCurrentQuestion] = useState(null);
@@ -71,6 +72,12 @@ export default function ExamShell({ mocktestList }) {
           return;
         }
 
+        // --- FIX STARTS HERE ---
+        setStopSignal(false); // Reset the stop signal for the new question
+        setPhase("prep"); // Reset phase to prep immediately
+        resetAnswer(); // Clear any old answer data
+        // --- FIX ENDS HERE ---
+
         setCurrentQuestion(q);
         console.log("current Question", q);
         console.log("next Question URL", data.next);
@@ -78,6 +85,7 @@ export default function ExamShell({ mocktestList }) {
 
         localStorage.setItem("current_question", targetUrl);
         localStorage.setItem("next_question", data.next);
+        localStorage.setItem("remaining_time", remainingTime);
 
         if (q.mocktest_section.section_name !== questionSection) {
           setQuestionSection(q.mocktest_section.section_name);
@@ -110,6 +118,8 @@ export default function ExamShell({ mocktestList }) {
   useEffect(() => {
     const storedSession = localStorage.getItem("exam_session_id");
     const storedName = localStorage.getItem("exam_user_name");
+    const remaining = localStorage.getItem("remaining_time");
+    if (remaining) setRemainingTime(parseInt(remaining, 10));
     if (storedSession && !sessionId) setSessionId(storedSession);
     if (storedName) setDisplayName(storedName);
     setRehydrated(true);
@@ -125,27 +135,36 @@ export default function ExamShell({ mocktestList }) {
 
   // --- 3. Submission Logic ---
   const handleModalNext = async () => {
-    setStopSignal(true);
     setCallAreYouSure(false);
+    // 1. Check if the question is currently in a recording/active state
+    const currentPhase = useExamStore.getState().phase;
 
-    // 1. Immediately clear the UI to show the skeleton
-    setCurrentQuestion(null);
-    setLoading(true);
+    // If not "finished", it means the user clicked Next while the timer was still running
+    console.log("phase", currentPhase);
+    // Logic: If it's not finished, we need to manually end the recording
+    if (currentPhase === "recording" || currentPhase === "prep") {
+      setStopSignal(true);
+      setLoading(true);
 
-    // 2. Buffer for Audio/State finalization
-    await new Promise((resolve) => setTimeout(resolve, 500));
+      // This pause is the "Safety Buffer" for the Audio Blob to be created
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
 
+    // 2. Now get the FRESH state (which now includes the blob from step 1)
     const finalAnswer = useExamStore.getState().answer;
-    console.log("answer", finalAnswer);
+
+    // 3. Prepare FormData
     const formData = new FormData();
-    formData.append("session_id", finalAnswer.session_id);
+    formData.append("session_id", sessionId);
     formData.append("question_name", finalAnswer.question_name);
 
+    // Handle Audio: Only append if it's a valid Blob
     if (finalAnswer.answer_audio instanceof Blob) {
       formData.append("answer_audio", finalAnswer.answer_audio, "answer.webm");
     }
 
-    if (finalAnswer.answer !== undefined) {
+    // Handle Text Answers
+    if (finalAnswer.answer !== undefined && finalAnswer.answer !== null) {
       const answerVal =
         typeof finalAnswer.answer === "object"
           ? JSON.stringify(finalAnswer.answer)
@@ -154,6 +173,7 @@ export default function ExamShell({ mocktestList }) {
     }
 
     try {
+      console.log("answer", finalAnswer);
       const postRes = await fetch(`${baseUrl}user-response/`, {
         method: "POST",
         body: formData,
@@ -161,27 +181,21 @@ export default function ExamShell({ mocktestList }) {
 
       if (!postRes.ok) throw new Error("Submission Failed");
 
-      // --- CRITICAL STEP ---
-      // Clear the answer key in the store so the NEXT question
-      // doesn't inherit the OLD answer/audio.
-      setAnswerKey("answer", {});
-      setAnswerKey("answer_audio", null);
-      resetAnswer();
+      // 4. CLEANUP: Reset store for the next question
+      setStopSignal(false);
+      resetAnswer(); // Ensure this clears both 'answer' and 'answer_audio'
 
       if (nextQuestionUrl) {
-        // Adding a tiny delay here ensures the backend has
-        // fully committed the previous response to the DB.
-        setTimeout(() => {
-          loadQuestion(nextQuestionUrl);
-        }, 100);
+        loadQuestion(nextQuestionUrl);
       } else {
         setLoading(false);
+        setCurrentQuestion(null); // Shows ExamCompleteScreen
       }
     } catch (error) {
       console.error("Submission Error:", error);
-      alert("Failed to save answer.");
+      alert("Submission failed. Please try again.");
       setLoading(false);
-      // Optional: Restore current question if fetch fails so user can retry
+      setStopSignal(false);
     }
   };
 

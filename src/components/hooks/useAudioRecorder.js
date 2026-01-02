@@ -4,41 +4,47 @@ import { useState, useRef, useCallback } from "react";
 export const useAudioRecorder = (setAnswerKey, maxDuration) => {
   const [error, setError] = useState(null);
   const mediaRecorderRef = useRef(null);
-  const streamRef = useRef(null); // Keep a reference to the stream
+  const streamRef = useRef(null);
   const chunksRef = useRef([]);
 
   const startRecording = useCallback(async () => {
     try {
-      // 1. Get the stream and store it in a Ref
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
       const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
       mediaRecorderRef.current = recorder;
-      chunksRef.current = []; 
+      chunksRef.current = [];
 
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
+        if (e.data && e.data.size > 0) {
           chunksRef.current.push(e.data);
+          console.log("Chunk received:", e.data.size); // Debugging
         }
       };
 
       recorder.onstop = () => {
-        // 2. Create the raw binary Blob
-        const audioBlob = new Blob(chunksRef.current, { type: "audio/webm" });
+        // Create the Blob from chunks gathered so far
+        console.log("entered to the onStop");
+        if (chunksRef.current.length > 0) {
+          const audioBlob = new Blob(chunksRef.current, { type: "audio/webm" });
+          console.log("Blob created successfully:", audioBlob.size);
+          setAnswerKey("answer_audio", audioBlob);
+        } else {
+          console.error("No audio chunks found at stop.");
+        }
 
-        // 3. Update the store ONLY with the Blob
-        // This targets the "answer_audio" key directly in your answer object
-        setAnswerKey("answer_audio", audioBlob);
-
-        // 4. Clean up tracks immediately
+        // Cleanup tracks
         if (streamRef.current) {
           streamRef.current.getTracks().forEach((track) => track.stop());
           streamRef.current = null;
         }
       };
 
-      recorder.start();
+      // CRITICAL CHANGE: Pass 1000ms to collect data every second
+      // This makes short recordings much more reliable
+      recorder.start(1000);
+
       return true;
     } catch (err) {
       console.error("Mic access error:", err);
@@ -48,8 +54,11 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
   }, [setAnswerKey]);
 
   const stopRecording = useCallback(() => {
-    // Only stop if we are actually recording to prevent duplicate 'onstop' triggers
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== "inactive"
+    ) {
+      console.log("calling the stopp");
       mediaRecorderRef.current.stop();
     }
   }, []);

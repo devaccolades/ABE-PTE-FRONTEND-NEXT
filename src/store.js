@@ -9,6 +9,7 @@ export const useExamStore = create((set, get) => ({
   sessionId: "",
   questionSection: "",
   questionTimer: 0,
+  stopSignal: false,
   remainingTime: 0,
   baseUrl: "https://admin.abepte.accoladesweb.com/mocktest/",
   // baseUrl: "http://192.168.29.96:8000/mocktest/",
@@ -22,7 +23,7 @@ export const useExamStore = create((set, get) => ({
   isStopSignalSent: false, // <-- NEW STATE VARIABLE
 
   // Set any top-level key of `answer`
-  setStopSignal: (value) => set({ isStopSignalSent: value }),
+  setStopSignal: (value) => set({ stopSignal: value }),
   // Inside your create() function
   // Replace the old setAnswerKey with these two
   setAnswerKey: (key, value) =>
