@@ -3,7 +3,7 @@ import { useEffect, useCallback } from "react";
 import { useExamStore } from "@/store";
 
 // UI Components
-import RecordingStatusDisplay from "../hooks/RecordingStatusDisplay"; 
+import RecordingStatusDisplay from "../hooks/RecordingStatusDisplay";
 import SectionTimerDisplay from "../ui/SectionTimerDisplay";
 
 // Hooks
@@ -16,12 +16,13 @@ export default function ReadAloud({
   prepSeconds = 30,
   recordSeconds = 45,
   subsection = "Read Aloud",
-  name
+  name,
 }) {
   const globalPhase = useExamStore((s) => s.setPhase);
   const setAnswerKey = useExamStore((s) => s.setAnswerKey);
   const isStopSignalSent = useExamStore((s) => s.isStopSignalSent);
   const setStopSignal = useExamStore((s) => s.setStopSignal);
+  const remainingTime = useExamStore((s) => s.remainingTime);
 
   // --- 1. Audio Recorder ---
   // Pass setAnswerKey to save the blob to "answer_audio"
@@ -35,9 +36,9 @@ export default function ReadAloud({
   // --- 2. Initial Data Setup ---
   useEffect(() => {
     // Ensure the 'answer' text field is an empty string for audio-only tasks
-    setAnswerKey("answer", ""); 
+    setAnswerKey("answer", "");
     // Initialize audio as null until recording finishes
-    setAnswerKey("answer_audio", null); 
+    setAnswerKey("answer_audio", null);
   }, [setAnswerKey, promptText]);
 
   // --- 3. Section Timer ---
@@ -45,7 +46,13 @@ export default function ReadAloud({
     stopAudio();
   }, [stopAudio]);
 
-  const { formattedTime, isExpired: isSectionExpired } = useSectionTimer(handleSectionTimeExpired);
+  const { formattedTime, isExpired: isSectionExpired } = useSectionTimer(
+    handleSectionTimeExpired
+  );
+
+  useEffect(() => {
+    console.log("remainingTime in ReadAloud:", remainingTime);
+  }, [remainingTime]);
 
   // --- 4. Recording Timer Logic ---
   const timerHook = useRecordingTimer(
@@ -94,10 +101,15 @@ export default function ReadAloud({
     <div className="space-y-6">
       <div className="flex justify-between items-center border-b pb-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-800 tracking-tight uppercase">{name}</h2>
+          <h2 className="text-xl font-bold text-gray-800 tracking-tight uppercase">
+            {name}
+          </h2>
           {/* <p className="text-sm text-gray-500">Look at the text below. In {prepSeconds} seconds, you must read this text aloud.</p> */}
         </div>
-        <SectionTimerDisplay formattedTime={formattedTime} isExpired={isSectionExpired} />
+        <SectionTimerDisplay
+          formattedTime={formattedTime}
+          isExpired={isSectionExpired}
+        />
       </div>
 
       <div className="rounded-xl border border-gray-200 p-8 bg-white shadow-sm ring-1 ring-gray-900/5">

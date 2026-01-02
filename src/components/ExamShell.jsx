@@ -81,11 +81,12 @@ export default function ExamShell({ mocktestList }) {
         setCurrentQuestion(q);
         console.log("current Question", q);
         console.log("next Question URL", data.next);
+        console.log("remain time from shell", remainingTime);
         setNextQuestion(data.next);
 
         localStorage.setItem("current_question", targetUrl);
         localStorage.setItem("next_question", data.next);
-        localStorage.setItem("remaining_time", remainingTime);
+        // localStorage.setItem("remaining_time", remainingTime);
 
         if (q.mocktest_section.section_name !== questionSection) {
           setQuestionSection(q.mocktest_section.section_name);
@@ -119,7 +120,7 @@ export default function ExamShell({ mocktestList }) {
     const storedSession = localStorage.getItem("exam_session_id");
     const storedName = localStorage.getItem("exam_user_name");
     const remaining = localStorage.getItem("remaining_time");
-    if (remaining) setRemainingTime(parseInt(remaining, 10));
+    // if (remaining) setRemainingTime(parseInt(remaining, 10));
     if (storedSession && !sessionId) setSessionId(storedSession);
     if (storedName) setDisplayName(storedName);
     setRehydrated(true);
@@ -178,6 +179,7 @@ export default function ExamShell({ mocktestList }) {
         method: "POST",
         body: formData,
       });
+      console.log("remain time from shell after submission ", remainingTime);
 
       if (!postRes.ok) throw new Error("Submission Failed");
 
