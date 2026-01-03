@@ -40,6 +40,30 @@ export default function DescribeImage({
     handleSectionTimeExpired
   );
 
+  // Add this inside your RetellLecture component
+  const stopSignal = useExamStore((s) => s.stopSignal);
+
+  useEffect(() => {
+    // If the ExamShell signals a stop, and we are currently recording or playing
+    if (stopSignal) {
+      // console.log("phase", stageRef.current);
+      if (phase === PHASES.RECORDING) {
+        console.log("inside the stop recording");
+        stopAudio(); // This hook internally calls setAnswerKey with the blob
+        // updateStage("FINISHED");
+      }
+      // else if (
+      //   stageRef.current === "PLAYING" ||
+      //   stageRef.current === "PREP"
+      // )
+      // {
+      //   // If we haven't even started recording, just move to finished
+      //   updateStage("FINISHED");
+      //   // if (pauseMedia) pauseMedia();
+      // }
+    }
+  }, [stopSignal, stopAudio]);
+
   // --- 3. Sequential Timer Hook (Local) ---
   const timerHook = useSequentialTimer(
     prepSeconds,
