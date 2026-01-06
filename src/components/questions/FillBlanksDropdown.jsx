@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useExamStore } from "@/store";
 import { useSectionTimer } from "../hooks/useSectionTimer";
 import SectionTimerDisplay from "../ui/SectionTimerDisplay";
@@ -10,47 +10,31 @@ export default function FillBlanksDropdown({
 }) {
   const setPhase = useExamStore((s) => s.setPhase);
   const setAnswerKey = useExamStore((s) => s.setAnswerKey);
-  
-  // 1. Local state for answers: { blank_number: option_id }
   const [answers, setAnswers] = useState({});
-
   const { formattedTime, isExpired: isSectionExpired } = useSectionTimer();
 
-  // 2. Logic to check if all blanks are filled
-  const isAllFilled = useMemo(() => {
-    const blankSegments = segments.filter(seg => seg.blank_number);
-    if (blankSegments.length === 0) return true;
-    
-    return blankSegments.every((seg) => {
-      const val = answers[seg.blank_number];
-      return val !== undefined && val !== "" && val !== null;
-    });
-  }, [segments, answers]);
-
-  // 3. SYNC TO STORE: This ensures data goes into the "answer" field
   useEffect(() => {
-    // We use the literal string "answer" so it matches your API's expected field
     setAnswerKey("answer", answers);
+    const hasAtLeastOneAnswer = Object.values(answers).some(
+      (val) => val !== undefined && val !== "" && val !== null
+    );
 
-    // Phase management to enable/disable the Next button
-    if (isSectionExpired || isAllFilled) {
-      setPhase("writing"); // Enables Next button
+    if (isSectionExpired || hasAtLeastOneAnswer) {
+      setPhase("writing");
     } else {
-      setPhase("prep"); // Disables Next button
+      setPhase("prep");
     }
-  }, [answers, isAllFilled, isSectionExpired, setAnswerKey, setPhase]);
+  }, [answers, isSectionExpired, setAnswerKey, setPhase]);
 
   const handleChange = (blankNumber, optionId) => {
-    setAnswers((prev) => ({
-      ...prev,
-      [blankNumber]: optionId,
-    }));
+    setAnswers((prev) => ({ ...prev, [blankNumber]: optionId }));
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center border-b pb-4">
-        <h2 className="text-xl font-bold text-gray-800 tracking-tight uppercase">
+    <div className="space-y-4 md:space-y-6 max-w-full overflow-x-hidden">
+      {/* Responsive Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 gap-3">
+        <h2 className="text-lg md:text-xl font-bold text-gray-800 tracking-tight uppercase">
           {subsection}
         </h2>
         <SectionTimerDisplay
@@ -59,8 +43,14 @@ export default function FillBlanksDropdown({
         />
       </div>
 
-      {/* Main Text Content */}
-      <div className="rounded-xl border border-gray-200 p-8 bg-white text-gray-900 text-lg leading-[3rem] shadow-sm">
+      {/* Main Text Content - Optimized for all screens */}
+      <div className={`
+        rounded-xl border border-gray-200 bg-white shadow-sm
+        p-4 sm:p-6 md:p-8 
+        text-base sm:text-lg 
+        leading-[2.5rem] sm:leading-[3rem] md:leading-[3.5rem] 
+        text-gray-900
+      `}>
         {segments.map((seg, index) => (
           <span key={index} className="inline">
             <span className="whitespace-pre-wrap">{seg.text_before_blank}</span>
@@ -80,27 +70,36 @@ export default function FillBlanksDropdown({
         ))}
       </div>
 
-      {/* Validation Warning */}
-      {!isAllFilled && !isSectionExpired && (
-        <div className="text-amber-600 text-sm font-medium bg-amber-50 p-3 rounded-lg border border-amber-100 flex items-center gap-2 animate-pulse">
-          <span>⚠️</span>
-          Please fill all blanks to proceed.
-        </div>
-      )}
+      {/* Dynamic Instruction Label */}
+      <div className="mt-2 md:mt-4 px-2 sm:px-4 py-2 rounded-md inline-block text-xs sm:text-sm font-medium transition-all duration-300">
+        {Object.keys(answers).length === 0 && !isSectionExpired ? (
+          <span className="text-slate-400 italic">Please answer at least one blank to enable "Next"</span>
+        ) : (
+          <span className="text-green-600 flex items-center gap-2">
+            ✓ Ready to proceed
+          </span>
+        )}
+      </div>
     </div>
   );
 }
 
 /**
- * Sub-component for the individual dropdowns
+ * Sub-component: Responsive Select
  */
 function SelectBlank({ blankNumber, options, value, onChange, disabled }) {
   return (
     <select
       disabled={disabled}
       className={`
-        mx-2 inline-flex h-10 min-w-[150px] rounded-md border px-3 text-base font-semibold
-        transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500
+        mx-1 sm:mx-2 inline-flex align-middle rounded-md border px-2 md:px-3 
+        text-sm sm:text-base font-semibold transition-all cursor-pointer 
+        focus:outline-none focus:ring-2 focus:ring-sky-500
+        
+        /* Width adjustments */
+        w-[120px] sm:w-[150px] md:w-[180px]
+        h-8 sm:h-9 md:h-10
+
         ${value ? "border-sky-400 bg-sky-50 text-sky-900 shadow-sm" : "border-gray-300 bg-white text-gray-400"}
         ${disabled ? "opacity-50 cursor-not-allowed bg-gray-100" : "hover:border-sky-400"}
       `}
@@ -108,7 +107,7 @@ function SelectBlank({ blankNumber, options, value, onChange, disabled }) {
       onChange={(e) => onChange(blankNumber, e.target.value)}
     >
       <option value="" disabled>Select...</option>
-      {options.map((opt) => (
+      {options?.map((opt) => (
         <option key={opt.id} value={opt.id}>
           {opt.option_text}
         </option>

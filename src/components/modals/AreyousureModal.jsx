@@ -1,17 +1,20 @@
 import React from "react";
 
-const AreyousureModal = ({ onClose, onNext, isLoading }) => {
+const AreyousureModal = ({
+  onClose,
+  onNext,
+  isLoading,
+  content = "Do you want to move on to the next question? You won't be able to return to this one.",
+  nextQuestion = "Next Question",
+}) => {
   return (
     <div className="fixed inset-0 z-[100] h-full w-full bg-black/60 flex justify-center items-center backdrop-blur-sm">
       <div className="w-[90%] max-w-[450px] bg-white rounded-2xl shadow-2xl p-8 flex flex-col gap-6 animate-in fade-in zoom-in duration-200">
-        
         <div className="space-y-2">
           <p className="text-2xl font-bold text-gray-800 leading-tight">
             Are you sure?
           </p>
-          <p className="text-gray-600 text-lg">
-            Do you want to move on to the next question? You won't be able to return to this one.
-          </p>
+          <p className="text-gray-600 text-lg">{content}</p>
         </div>
 
         <div className="flex justify-end items-center gap-3">
@@ -22,7 +25,7 @@ const AreyousureModal = ({ onClose, onNext, isLoading }) => {
           >
             Go Back
           </button>
-          
+
           <button
             disabled={isLoading}
             onClick={onNext}
@@ -34,7 +37,7 @@ const AreyousureModal = ({ onClose, onNext, isLoading }) => {
                 <span>Saving...</span>
               </div>
             ) : (
-              "Next Question"
+              nextQuestion
             )}
           </button>
         </div>

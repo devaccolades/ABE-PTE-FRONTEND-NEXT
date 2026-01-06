@@ -26,6 +26,8 @@ import { Separator } from "@/components/ui/separator";
 import FillBlanksDragDrop from "./questions/FillBlanksDragDrop";
 import SummarizeTheText from "./questions/SummarizeTheText";
 import ExamCompleteScreen from "./ui/ExamCompleteScreen";
+import PTEReadinessCheck from "./questions/PTEReadinessCheck";
+import PreExam from "./questions/PreExam";
 
 export default function ExamShell({ mocktestList }) {
   const {
@@ -52,7 +54,18 @@ export default function ExamShell({ mocktestList }) {
   const [callAreYouSure, setCallAreYouSure] = useState(false);
   const [rehydrated, setRehydrated] = useState(false);
   const [displayName, setDisplayName] = useState("");
+  const {
+    startExam, // <--- Change: Read from store
+    setStartExam, // <--- Change: This replaces setExamStarted
+    // ... rest of your store items
+  } = useExamStore();
 
+  useEffect(() => {
+    const savedStatus = localStorage.getItem("startExam");
+    if (savedStatus === "true") {
+      setStartExam(true);
+    }
+  }, [setStartExam]);
   // --- 1. Consolidated Loader ---
   const loadQuestion = useCallback(
     async (targetUrl) => {
@@ -89,6 +102,7 @@ export default function ExamShell({ mocktestList }) {
 
         localStorage.setItem("current_question", targetUrl);
         localStorage.setItem("next_question", data.next);
+        localStorage.setItem("startExam", startExam);
         // localStorage.setItem("remaining_time", remainingTime);
 
         if (q.mocktest_section.section_name !== questionSection) {
@@ -207,36 +221,43 @@ export default function ExamShell({ mocktestList }) {
 
   if (!displayName) return <NameGate mocktestList={mocktestList} />;
   if (loading && !currentQuestion) return <ExamLoadingSkeleton />;
+  if (!startExam) return <PreExam />;
   if (!currentQuestion) return <ExamCompleteScreen userName={userName} />;
 
   return (
     <>
-      <Card className="w-full max-w-4xl mx-auto shadow-lg border-none">
-        <CardHeader className="bg-slate-50">
-          <CardTitle className="text-sky-800">
-            {titleFor(currentQuestion.subsection)}
-          </CardTitle>
-          <div className="text-sm text-gray-500">
-            Candidate:{" "}
-            <span className="font-bold text-gray-700">{userName}</span>
+      <Card className="w-full max-w-4xl mx-auto shadow-lg border-none md:border sm:rounded-xl rounded-none">
+        {/* Header: Adjusted padding and text size for mobile */}
+        <CardHeader className="bg-slate-50 p-4 md:p-6">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+            <CardTitle className="text-sky-800 text-lg md:text-xl">
+              {titleFor(currentQuestion.subsection)}
+            </CardTitle>
+            <div className="text-xs md:text-sm text-gray-500">
+              Candidate:{" "}
+              <span className="font-bold text-gray-700">{userName}</span>
+            </div>
           </div>
         </CardHeader>
 
-        <CardContent className="p-6">
-          <h2 className="font-bold text-lg mb-2">
+        <CardContent className="p-4 md:p-8">
+          {/* Instruction: Responsive font size and margin */}
+          <h2 className="font-bold text-base md:text-lg mb-3 md:mb-4 leading-tight">
             {currentQuestion.subsection_instruction}
           </h2>
-          <Separator className="mb-6" />
+          <Separator className="mb-4 md:mb-6" />
 
-          <div className="min-h-[250px]">
+          {/* Question Container: Flexible height */}
+          <div className="min-h-[200px] md:min-h-[250px]">
             {renderQuestionComponent(currentQuestion, handleModalNext)}
           </div>
 
-          <div className="mt-8 pt-4 border-t flex justify-end">
+          {/* Footer: Full-width button on mobile for better thumb reach */}
+          <div className="mt-6 md:mt-10 pt-4 border-t flex justify-end">
             <button
               disabled={phase === "prep"}
               onClick={() => setCallAreYouSure(true)}
-              className={`px-8 py-2 rounded-md font-bold transition-all ${
+              className={`w-full sm:w-auto px-10 py-3 md:py-2 rounded-lg md:rounded-md font-bold transition-all text-base md:text-sm ${
                 phase === "prep"
                   ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                   : "bg-sky-600 text-white hover:bg-sky-700 shadow-md active:scale-95"

@@ -11,6 +11,7 @@ export const useExamStore = create((set, get) => ({
   questionTimer: 0,
   stopSignal: false,
   remainingTime: 0,
+  startExam: false,
   baseUrl: "https://admin.abepte.accoladesweb.com/mocktest/",
   // baseUrl: "http://192.168.29.96:8000/mocktest/",
   answer: {
@@ -22,6 +23,7 @@ export const useExamStore = create((set, get) => ({
   phase: "prep",
   isStopSignalSent: false, // <-- NEW STATE VARIABLE
 
+  setStartExam: (value) => set({ startExam: value }),
   // Set any top-level key of `answer`
   setStopSignal: (value) => set({ stopSignal: value }),
   // Inside your create() function
