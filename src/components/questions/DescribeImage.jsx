@@ -1,16 +1,14 @@
-// src/components/DescribeImage.jsx
-
 "use client";
 import { useEffect, useCallback } from "react";
 import { useExamStore } from "@/store";
-import Image from "next/image";
+import { ImageIcon } from "lucide-react";
 
 // Import reusable hooks and constants
 import { useAudioRecorder } from "../hooks/useAudioRecorder";
 import { useSequentialTimer, PHASES } from "../hooks/useSequentialTimer";
 import { useSectionTimer } from "../hooks/useSectionTimer";
 import RecordingStatusDisplay from "../hooks/RecordingStatusDisplay";
-import SectionTimerDisplay from "../ui/SectionTimerDisplay"; // <--- Corrected Path
+import SectionTimerDisplay from "../ui/SectionTimerDisplay";
 
 export default function DescribeImage({
   imageUrl,
@@ -21,6 +19,7 @@ export default function DescribeImage({
 }) {
   const setAnswerKey = useExamStore((s) => s.setAnswerKey);
   const globalPhase = useExamStore((s) => s.setPhase);
+  const stopSignal = useExamStore((s) => s.stopSignal);
 
   // --- 1. Audio Recorder Hook ---
   const {
@@ -33,56 +32,24 @@ export default function DescribeImage({
   // --- 2. Section Timer (Global) ---
   const handleSectionTimeExpired = useCallback(() => {
     stopAudio();
-    // Logic for ending the whole section is handled via isExpired effect below
   }, [stopAudio]);
 
   const { formattedTime, isExpired: isSectionExpired } = useSectionTimer(
     handleSectionTimeExpired
   );
 
-  // Add this inside your RetellLecture component
-  const stopSignal = useExamStore((s) => s.stopSignal);
-
-  useEffect(() => {
-    // If the ExamShell signals a stop, and we are currently recording or playing
-    if (stopSignal) {
-      // console.log("phase", stageRef.current);
-      if (phase === PHASES.RECORDING) {
-        console.log("inside the stop recording");
-        stopAudio(); // This hook internally calls setAnswerKey with the blob
-        // updateStage("FINISHED");
-      }
-      // else if (
-      //   stageRef.current === "PLAYING" ||
-      //   stageRef.current === "PREP"
-      // )
-      // {
-      //   // If we haven't even started recording, just move to finished
-      //   updateStage("FINISHED");
-      //   // if (pauseMedia) pauseMedia();
-      // }
-    }
-  }, [stopSignal, stopAudio]);
-
   // --- 3. Sequential Timer Hook (Local) ---
   const timerHook = useSequentialTimer(
     prepSeconds,
-    0, // No middle phase for Describe Image
+    0, 
     recordSeconds,
     questionId,
-
-    // onPrepEnd: Prep ends -> Start Recording
     () => {
       if (isSectionExpired) return;
-      // Tell the timer to switch phase and reset anchor time to recordSeconds
       timerHook.setPhase(PHASES.RECORDING);
       startAudio();
     },
-
-    // onMiddleEnd: Skipped
     () => {},
-
-    // onRecordEnd: Recording ends -> Stop Recording
     () => {
       stopAudio();
       timerHook.setPhase(PHASES.FINISHED);
@@ -93,15 +60,23 @@ export default function DescribeImage({
 
   // --- 4. Effects ---
 
+  // Handle ExamShell Stop Signal
+  useEffect(() => {
+    if (stopSignal && phase === PHASES.RECORDING) {
+      stopAudio();
+      timerHook.setPhase(PHASES.FINISHED);
+    }
+  }, [stopSignal, stopAudio, phase, timerHook]);
+
   // Handle Section Expiration
   useEffect(() => {
     if (isSectionExpired) {
       stopAudio();
       timerHook.setPhase(PHASES.FINISHED);
     }
-  }, [isSectionExpired, stopAudio]);
+  }, [isSectionExpired, stopAudio, timerHook]);
 
-  // Sync Global Phase (Controls "Next" button)
+  // Sync Global Phase
   useEffect(() => {
     if (isSectionExpired) {
       globalPhase(PHASES.FINISHED);
@@ -118,53 +93,61 @@ export default function DescribeImage({
     return () => cleanupAudio();
   }, [cleanupAudio]);
 
-  const currentError = recorderError;
-
   // ---------------- UI ----------------
   return (
-    <div className="space-y-6">
-      {/* Header with Global Section Timer */}
-      <div className="flex justify-between items-center border-b pb-4">
-        <h2 className="text-xl font-bold text-gray-800 uppercase tracking-tight">
-          {subsection}
-        </h2>
+    <div className="space-y-4 md:space-y-6 max-w-full overflow-hidden">
+      {/* HEADER: Stacks on mobile */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-3 md:pb-4 gap-3">
+        <div className="flex items-center gap-2">
+          <ImageIcon className="w-5 h-5 text-sky-600 shrink-0" />
+          <h2 className="text-lg md:text-xl font-bold text-gray-800 uppercase tracking-tight truncate">
+            {subsection}
+          </h2>
+        </div>
         <SectionTimerDisplay
           formattedTime={formattedTime}
           isExpired={isSectionExpired}
         />
       </div>
 
-      {/* Image Display */}
-      <div className="border-2 border-gray-100 rounded-xl overflow-hidden shadow-sm flex justify-center bg-white p-2">
-        <img
-          src={imageUrl}
-          alt="Describe visual"
-          width={600}
-          height={400}
-          className="max-h-80 w-auto object-contain transition-all hover:scale-[1.01]"
-        />
+      {/* IMAGE DISPLAY: Responsive sizing */}
+      <div className="border-2 border-gray-100 rounded-xl overflow-hidden shadow-sm flex justify-center bg-white p-2 md:p-4">
+        <div className="relative w-full flex justify-center">
+          <img
+            src={imageUrl}
+            alt="Describe visual content"
+            className="h-auto max-h-[250px] sm:max-h-[350px] md:max-h-[450px] w-full object-contain transition-transform duration-500 hover:scale-[1.02]"
+          />
+        </div>
       </div>
 
-      {/* Timer & Recording Status */}
-      {isSectionExpired ? (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-center font-medium animate-pulse">
-          ⚠️ Section time expired. Your recording was saved.
-        </div>
-      ) : (
-        <RecordingStatusDisplay
-          phase={phase}
-          prepLeft={prepLeft}
-          recLeft={recLeft}
-          prepProgress={prepProgress}
-          recProgress={recProgress}
-          error={currentError}
-        />
-      )}
+      {/* STATUS DISPLAY */}
+      <div className="w-full">
+        {isSectionExpired ? (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-center font-medium text-xs md:text-sm animate-pulse">
+            ⚠️ Section time expired. Your recording was saved.
+          </div>
+        ) : (
+          <div className="bg-slate-50/50 rounded-xl p-3 md:p-6 border border-slate-100">
+            <RecordingStatusDisplay
+              phase={phase}
+              prepLeft={prepLeft}
+              recLeft={recLeft}
+              prepProgress={prepProgress}
+              recProgress={recProgress}
+              error={recorderError}
+            />
+          </div>
+        )}
+      </div>
 
-      <div className="text-center text-xs text-gray-400 italic">
-        {phase === PHASES.PREP &&
-          "Look at the image and prepare your description."}
-        {phase === PHASES.RECORDING && "Recording... describe the image now."}
+      {/* HELP TEXT */}
+      <div className="text-center px-4">
+        <p className="text-[10px] md:text-xs text-gray-400 italic font-medium">
+          {phase === PHASES.PREP && "Analyze the chart/image and prepare your response."}
+          {phase === PHASES.RECORDING && "Microphone active: Describe the image details now."}
+          {phase === PHASES.FINISHED && "Recording completed."}
+        </p>
       </div>
     </div>
   );

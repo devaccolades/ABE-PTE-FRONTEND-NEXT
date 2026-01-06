@@ -1,59 +1,81 @@
 "use client";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useExamStore } from "@/store";
 import { useSectionTimer } from "../hooks/useSectionTimer";
 import SectionTimerDisplay from "../ui/SectionTimerDisplay";
 
 export default function FillBlanksDragDrop({
-  segments = "", // Raw text with "----"
-  options = [],  // Array of option objects
+  segments = "",
+  options = [],
   subsection = "Reading: Fill in the Blanks",
   questionId
 }) {
   const setPhase = useExamStore((s) => s.setPhase);
   const setAnswerKey = useExamStore((s) => s.setAnswerKey);
 
-  // 1. LOCAL STATE
-  const [answers, setAnswers] = useState({}); // { 1: {id, text}, 2: {id, text} }
+  const [answers, setAnswers] = useState({}); // { blank_idx: {id, text} }
+  const [selectedOption, setSelectedOption] = useState(null); // For Mobile Tap-to-Fill
 
-  const { formattedTime, isExpired: isSectionExpired } = useSectionTimer();
+  const handleSectionTimeExpired = useCallback(() => {
+    console.log("Time expired");
+  }, []);
 
-  // 2. PARSE PLAIN TEXT INTO BLANKS
-  // Splits text by "----". The resulting array will have text, then a blank, then text.
-  const textParts = useMemo(() => {
-    return segments.split(/----/g);
-  }, [segments]);
+  const { formattedTime, isExpired: isSectionExpired } = useSectionTimer(handleSectionTimeExpired);
 
+  const textParts = useMemo(() => segments.split(/----/g), [segments]);
   const totalBlanks = textParts.length - 1;
 
-  // 3. CALCULATE AVAILABLE OPTIONS
   const availableOptions = useMemo(() => {
     const usedIds = Object.values(answers).map((a) => a.id);
     return options.filter((opt) => !usedIds.includes(opt.id));
   }, [options, answers]);
 
-  const isAllFilled = useMemo(() => {
-    return Object.keys(answers).length === totalBlanks;
-  }, [answers, totalBlanks]);
-
-  // 4. SYNC TO GLOBAL STORE
+  // Sync to Store
   useEffect(() => {
     const formattedAnswers = Object.keys(answers).reduce((acc, key) => {
       acc[key] = answers[key].id;
       return acc;
     }, {});
-
     setAnswerKey("answer", formattedAnswers);
 
-    if (isSectionExpired || isAllFilled) {
+    const hasAtLeastOneAnswer = Object.keys(answers).length > 0;
+    if (isSectionExpired || hasAtLeastOneAnswer) {
       setPhase("writing");
     } else {
       setPhase("prep");
     }
-  }, [answers, isAllFilled, isSectionExpired, setAnswerKey, setPhase]);
+  }, [answers, isSectionExpired, setAnswerKey, setPhase]);
 
-  // --- DRAG & DROP LOGIC ---
+  // --- MOBILE TAP LOGIC ---
+  const handleOptionClick = (option) => {
+    if (isSectionExpired) return;
+    // Toggle selection
+    setSelectedOption(selectedOption?.id === option.id ? null : option);
+  };
+
+  const handleBlankClick = (blankIdx) => {
+    if (isSectionExpired) return;
+
+    // If a blank is already filled, move it back to pool
+    if (answers[blankIdx]) {
+      setAnswers((prev) => {
+        const next = { ...prev };
+        delete next[blankIdx];
+        return next;
+      });
+      return;
+    }
+
+    // If an option is selected, place it in this blank
+    if (selectedOption) {
+      setAnswers((prev) => ({ ...prev, [blankIdx]: selectedOption }));
+      setSelectedOption(null);
+    }
+  };
+
+  // --- DESKTOP DRAG & DROP LOGIC ---
   const onDragStart = (e, option, fromBlank = null) => {
+    if (isSectionExpired) return e.preventDefault();
     e.dataTransfer.setData("option", JSON.stringify(option));
     if (fromBlank) e.dataTransfer.setData("fromBlank", fromBlank);
   };
@@ -61,16 +83,16 @@ export default function FillBlanksDragDrop({
   const onDropOnBlank = (e, targetBlankNumber) => {
     e.preventDefault();
     if (isSectionExpired) return;
-
-    const option = JSON.parse(e.dataTransfer.getData("option"));
-    const fromBlank = e.dataTransfer.getData("fromBlank");
-
-    setAnswers((prev) => {
-      const next = { ...prev };
-      if (fromBlank) delete next[fromBlank];
-      next[targetBlankNumber] = option;
-      return next;
-    });
+    try {
+      const option = JSON.parse(e.dataTransfer.getData("option"));
+      const fromBlank = e.dataTransfer.getData("fromBlank");
+      setAnswers((prev) => {
+        const next = { ...prev };
+        if (fromBlank) delete next[fromBlank];
+        next[targetBlankNumber] = option;
+        return next;
+      });
+    } catch (err) { console.error(err); }
   };
 
   const onDropOnPool = (e) => {
@@ -86,18 +108,23 @@ export default function FillBlanksDragDrop({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center border-b pb-4">
-        <h2 className="text-xl font-bold text-gray-800 tracking-tight uppercase">
-          {subsection}
-        </h2>
+    <div className="space-y-4 md:space-y-6 max-w-full">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 gap-3">
+        <h2 className="text-lg md:text-xl font-bold text-gray-800 uppercase tracking-tight">{subsection}</h2>
         <SectionTimerDisplay formattedTime={formattedTime} isExpired={isSectionExpired} />
       </div>
 
-      {/* TEXT AREA WITH DRAGGABLE BOXES */}
-      <div className="rounded-xl border border-gray-200 p-8 bg-white text-gray-900 text-lg leading-[3.5rem] shadow-sm">
+      {/* MOBILE INSTRUCTION */}
+      {!isSectionExpired && (
+        <p className="block md:hidden text-[10px] text-center text-sky-600 font-bold uppercase bg-sky-50 py-1 rounded">
+          {selectedOption ? `Now tap a blank to place "${selectedOption.option_text}"` : "Tap a word, then tap a blank"}
+        </p>
+      )}
+
+      {/* TEXT AREA */}
+      <div className="rounded-xl border border-gray-200 p-4 md:p-8 bg-white text-gray-900 text-base md:text-lg leading-[3rem] md:leading-[4rem] shadow-sm">
         {textParts.map((part, index) => (
-          <span key={index}>
+          <span key={index} className="inline">
             <span className="whitespace-pre-wrap">{part}</span>
             {index < totalBlanks && (
               <DropTarget
@@ -105,7 +132,9 @@ export default function FillBlanksDragDrop({
                 filledValue={answers[index + 1]}
                 onDrop={onDropOnBlank}
                 onDragStart={onDragStart}
+                onClick={() => handleBlankClick(index + 1)}
                 disabled={isSectionExpired}
+                isWaitingForPlacement={!!selectedOption}
               />
             )}
           </span>
@@ -114,84 +143,71 @@ export default function FillBlanksDragDrop({
 
       {/* OPTIONS POOL */}
       <div 
-        className="p-6 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200"
+        className={`p-4 md:p-6 bg-slate-50 rounded-xl border-2 border-dashed transition-colors ${selectedOption ? 'border-sky-400 bg-sky-50/50' : 'border-slate-200'}`}
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDropOnPool}
       >
-        <div className="text-[10px] font-bold text-slate-400 uppercase mb-4 tracking-widest text-center">
-          DRAG OPTIONS BELOW INTO THE BLANKS
-        </div>
-        <div className="flex flex-wrap gap-3 justify-center min-h-[60px]">
+        <div className="flex flex-wrap gap-2 md:gap-3 justify-center min-h-[50px]">
           {availableOptions.map((opt) => (
             <DraggableOption
               key={opt.id}
               option={opt}
+              isSelected={selectedOption?.id === opt.id}
               onDragStart={(e) => onDragStart(e, opt)}
+              onClick={() => handleOptionClick(opt)}
               disabled={isSectionExpired}
             />
           ))}
           {availableOptions.length === 0 && (
-            <div className="text-slate-400 text-sm italic py-4 animate-in fade-in">
-              All items have been placed
-            </div>
+            <div className="text-slate-400 text-sm italic py-2">All words placed</div>
           )}
         </div>
       </div>
-
-      {!isAllFilled && !isSectionExpired && (
-        <div className="text-amber-600 text-sm font-medium bg-amber-50 p-4 rounded-lg border border-amber-100 flex justify-center items-center gap-2 animate-in slide-in-from-bottom-2">
-          <span>⚠️</span> Complete the text by dragging all options to enable the Next button.
-        </div>
-      )}
     </div>
   );
 }
 
 // --- SUB-COMPONENTS ---
 
-function DropTarget({ blankNumber, filledValue, onDrop, onDragStart, disabled }) {
+function DropTarget({ blankNumber, filledValue, onDrop, onDragStart, onClick, disabled, isWaitingForPlacement }) {
   const [isOver, setIsOver] = useState(false);
 
   return (
     <span
-      onDragOver={(e) => { e.preventDefault(); setIsOver(true); }}
+      onClick={onClick}
+      onDragOver={(e) => { e.preventDefault(); if(!disabled) setIsOver(true); }}
       onDragLeave={() => setIsOver(false)}
       onDrop={(e) => { setIsOver(false); onDrop(e, blankNumber); }}
       className={`
-        mx-2 inline-flex items-center justify-center align-middle
-        min-w-[140px] h-10 px-3 rounded-md border-2 transition-all duration-200
+        mx-1 md:mx-2 inline-flex items-center justify-center align-middle
+        min-w-[100px] md:min-w-[140px] h-8 md:h-10 px-2 md:px-3 rounded md:rounded-md border-2 transition-all
         ${filledValue 
-          ? "bg-sky-600 border-sky-600 text-white font-medium shadow-md" 
+          ? "bg-sky-600 border-sky-600 text-white font-medium shadow-sm" 
           : "bg-gray-50 border-gray-300 border-dashed"}
-        ${isOver ? "border-sky-500 bg-sky-100 scale-110" : ""}
-        ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-default"}
+        ${isOver || (isWaitingForPlacement && !filledValue) ? "border-sky-500 bg-sky-100" : ""}
+        ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
       `}
     >
-      {filledValue ? (
-        <span
-          draggable={!disabled}
-          onDragStart={(e) => onDragStart(e, filledValue, blankNumber)}
-          className="cursor-grab active:cursor-grabbing w-full text-center truncate"
-        >
-          {filledValue.option_text}
-        </span>
-      ) : (
-        <span className="text-gray-300 text-xs font-bold">DROP HERE</span>
-      )}
+      <span className="text-sm md:text-base truncate max-w-[120px] md:max-w-[180px]">
+        {filledValue ? filledValue.option_text : ""}
+      </span>
     </span>
   );
 }
 
-function DraggableOption({ option, onDragStart, disabled }) {
+function DraggableOption({ option, onDragStart, onClick, disabled, isSelected }) {
   return (
     <div
       draggable={!disabled}
       onDragStart={onDragStart}
+      onClick={onClick}
       className={`
-        px-5 py-2.5 bg-white border-2 border-gray-200 rounded-lg shadow-sm
-        text-base font-semibold text-gray-700 select-none
-        transition-all hover:border-sky-500 hover:shadow-sky-100 hover:shadow-lg
-        ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-grab active:cursor-grabbing active:scale-90 hover:-translate-y-1"}
+        px-3 py-1.5 md:px-5 md:py-2.5 border-2 rounded-lg shadow-sm
+        text-sm md:text-base font-semibold select-none transition-all
+        ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-grab active:scale-95"}
+        ${isSelected 
+          ? "bg-sky-500 border-sky-600 text-white ring-2 ring-sky-200" 
+          : "bg-white border-gray-200 text-gray-700 hover:border-sky-400"}
       `}
     >
       {option.option_text}
