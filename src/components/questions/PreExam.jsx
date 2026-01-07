@@ -10,7 +10,7 @@ const PreExam = () => {
   const FLOW = {
     INTRO: "intro",
     AUDIOCHECK: "audiocheck",
-    SELFINTRO: "selfintro",
+    // SELFINTRO: "selfintro",
     SELFINTRORECORDING: "selfintrorecording",
     NOTIFICATION: "notification",
   };
@@ -23,14 +23,14 @@ const PreExam = () => {
       return <PTEReadinessCheck onProceed={() => setFlow(FLOW.AUDIOCHECK)} />;
 
     case FLOW.AUDIOCHECK:
-      return <MicCheck onFinished={() => setFlow(FLOW.SELFINTRO)} />;
+      return <MicCheck onFinished={() => setFlow(FLOW.SELFINTRORECORDING)} />;
 
-    case FLOW.SELFINTRO:
-      return (
-        <PersonalIntroduction
-          onComplete={() => setFlow(FLOW.SELFINTRORECORDING)}
-        />
-      );
+    // case FLOW.SELFINTRO:
+    //   return (
+    //     <PersonalIntroduction
+    //       onComplete={() => setFlow(FLOW.SELFINTRORECORDING)}
+    //     />
+    //   );
 
     case FLOW.SELFINTRORECORDING:
       return <AudioSoftStart onNext={() => setFlow(FLOW.NOTIFICATION)} />;

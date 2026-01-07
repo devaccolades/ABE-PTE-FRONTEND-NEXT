@@ -40,14 +40,15 @@ export default function ExamShell({ mocktestList }) {
     setAnswerKey,
     nextQuestion: nextQuestionUrl,
     setNextQuestion,
-    setQuestionSection,
-    setQuestionTimer,
-    setRemainingTime,
-    remainingTime,
     setStopSignal,
-    questionSection,
     resetAnswer,
   } = useExamStore();
+
+  const questionSection = useExamStore((state) => state.questionSection);
+  const setQuestionSection = useExamStore((state) => state.setQuestionSection);
+  const setQuestionTimer = useExamStore((state) => state.setQuestionTimer);
+  const setRemainingTime = useExamStore((state) => state.setRemainingTime);
+  const remainingTime = useExamStore((state) => state.remainingTime);
 
   const [currentQuestion, setCurrentQuestion] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -249,7 +250,7 @@ export default function ExamShell({ mocktestList }) {
 
           {/* Question Container: Flexible height */}
           <div className="min-h-[200px] md:min-h-[250px]">
-            {renderQuestionComponent(currentQuestion, handleModalNext)}
+            {renderQuestionComponent(currentQuestion, handleModalNext, remainingTime)}
           </div>
 
           {/* Footer: Full-width button on mobile for better thumb reach */}
@@ -282,9 +283,10 @@ export default function ExamShell({ mocktestList }) {
 /**
  * Consolidated Router using ONLY q.subsection
  */
-function renderQuestionComponent(q, onNext) {
+function renderQuestionComponent(q, onNext, remainingTime) {
   const id = q.id;
   const sub = q.subsection;
+  
 
   switch (sub) {
     // --- Speaking ---
@@ -335,7 +337,7 @@ function renderQuestionComponent(q, onNext) {
         <WriteEssay
           key={id}
           promptText={q.text}
-          durationSeconds={q.reading_time}
+          durationSeconds={remainingTime}
           subsection={sub}
           onNext={onNext}
         />

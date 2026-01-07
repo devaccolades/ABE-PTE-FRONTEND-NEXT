@@ -3,16 +3,28 @@ import { useExamStore } from "@/store";
 
 export function useSectionTimer(onTimeExpired) {
   const setGlobalRemainingTime = useExamStore((s) => s.setRemainingTime);
+  // 1. Listen to the global remainingTime from Zustand
+  const globalRemainingTime = useExamStore((s) => s.remainingTime);
   
-  // 1. Get initial time: Try LocalStorage first, then Store, then fallback to 1800
   const getInitialTime = () => {
     const saved = localStorage.getItem("section_time_left");
     if (saved !== null) return parseInt(saved, 10);
-    return useExamStore.getState().remainingTime || 1800;
+    return globalRemainingTime || 1800;
   };
 
   const [timeLeft, setTimeLeft] = useState(getInitialTime);
   const timeLeftRef = useRef(getInitialTime());
+
+  // --- SYNC LOGIC: If Global State changes (New Section), Reset Local Timer ---
+  useEffect(() => {
+    // If global time is different from our local ref by more than a second,
+    // it means the ExamShell has loaded a new section.
+    if (Math.abs(globalRemainingTime - timeLeftRef.current) > 1) {
+      setTimeLeft(globalRemainingTime);
+      timeLeftRef.current = globalRemainingTime;
+      localStorage.setItem("section_time_left", globalRemainingTime.toString());
+    }
+  }, [globalRemainingTime]);
 
   useEffect(() => {
     // 2. Continuous Countdown
@@ -28,7 +40,7 @@ export function useSectionTimer(onTimeExpired) {
           return 0;
         }
 
-        // 3. Update Ref and LocalStorage every second for maximum persistence
+        // 3. Update Ref and LocalStorage
         timeLeftRef.current = nextValue;
         localStorage.setItem("section_time_left", nextValue.toString());
         return nextValue;
@@ -37,7 +49,7 @@ export function useSectionTimer(onTimeExpired) {
 
     return () => {
       clearInterval(intervalId);
-      // 4. Save to global store on exit
+      // 4. Save to global store on unmount
       setGlobalRemainingTime(timeLeftRef.current);
     };
   }, [setGlobalRemainingTime, onTimeExpired]);
