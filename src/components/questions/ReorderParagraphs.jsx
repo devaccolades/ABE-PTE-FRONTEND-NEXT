@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useExamStore } from "@/store";
 import { useSectionTimer } from "../hooks/useSectionTimer";
 import SectionTimerDisplay from "../ui/SectionTimerDisplay";
@@ -20,14 +20,24 @@ export default function ReorderParagraphs({
 
   const { formattedTime, isExpired } = useSectionTimer(handleSectionTimeExpired);
 
-  // --- Data Initialization ---
-  const initialSource = useMemo(() =>
-    items.map((it, i) => ({
+  // --- Data Initialization with Correct Randomization Sequence ---
+  const initialSource = useMemo(() => {
+    // 1. Create a copy of the raw items to shuffle
+    const shuffledItems = [...items];
+    
+    // 2. Shuffle using Fisher-Yates Algorithm FIRST
+    for (let i = shuffledItems.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledItems[i], shuffledItems[j]] = [shuffledItems[j], shuffledItems[i]];
+    }
+
+    // 3. Map to internal format and assign A, B, C, D labels based on the NEW order
+    return shuffledItems.map((it, i) => ({
       id: it.id ?? String(i),
       text: it.option_text ?? String(it),
-      label: it.label ?? indexToLabel(i),
-    })), [items]
-  );
+      label: indexToLabel(i), // First item in source will be 'A'
+    }));
+  }, [items]);
 
   const [source, setSource] = useState(initialSource);
   const [target, setTarget] = useState([]);
@@ -157,8 +167,6 @@ export default function ReorderParagraphs({
   );
 }
 
-// --- SUB-COMPONENTS ---
-
 function Column({ title, items, onDropContainer, onDropAtPosition, onDragStart, onTapItem, isExpired }) {
   const isSource = title.toLowerCase() === "source";
   return (
@@ -223,11 +231,6 @@ function DropZone({ onDrop, label = "" }) {
   );
 }
 
-// --- HELPER FUNCTIONS ---
-
-/**
- * Converts index to Letter label (0=A, 1=B, 2=C...)
- */
 function indexToLabel(i) {
   let n = i;
   let label = "";
@@ -239,9 +242,6 @@ function indexToLabel(i) {
   return label;
 }
 
-/**
- * Safely parse JSON string
- */
 function safeParse(s) {
   try {
     return JSON.parse(s);

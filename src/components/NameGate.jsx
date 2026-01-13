@@ -22,9 +22,7 @@ export default function NameGate() {
   useEffect(() => {
     const fetchMocktests = async () => {
       try {
-        const res = await fetch(
-          "https://admin.abepte.accoladesweb.com/mocktest/mocktest-list/"
-        );
+        const res = await fetch(`${baseUrl}mocktest-list/`);
 
         if (!res.ok) throw new Error("Failed to fetch mocktests");
 
@@ -49,17 +47,14 @@ export default function NameGate() {
     setMockTestId(selectedTest);
 
     try {
-      const res = await fetch(
-        "https://admin.abepte.accoladesweb.com/mocktest/start-test/",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name,
-            mocktest_id: selectedTest,
-          }),
-        }
-      );
+      const res = await fetch(`${baseUrl}start-test/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          mocktest_id: selectedTest,
+        }),
+      });
 
       if (!res.ok) throw new Error("Failed to start exam");
 

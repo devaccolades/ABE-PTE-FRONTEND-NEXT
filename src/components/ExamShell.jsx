@@ -250,7 +250,11 @@ export default function ExamShell({ mocktestList }) {
 
           {/* Question Container: Flexible height */}
           <div className="min-h-[200px] md:min-h-[250px]">
-            {renderQuestionComponent(currentQuestion, handleModalNext, remainingTime)}
+            {renderQuestionComponent(
+              currentQuestion,
+              handleModalNext,
+              remainingTime
+            )}
           </div>
 
           {/* Footer: Full-width button on mobile for better thumb reach */}
@@ -286,7 +290,6 @@ export default function ExamShell({ mocktestList }) {
 function renderQuestionComponent(q, onNext, remainingTime) {
   const id = q.id;
   const sub = q.subsection;
-  
 
   switch (sub) {
     // --- Speaking ---
@@ -322,9 +325,10 @@ function renderQuestionComponent(q, onNext, remainingTime) {
         <RetellLecture
           key={id}
           audioUrl={q.audio}
-          videoUrl={q.video}
+          videoUrl={q.image}
           prepSeconds={q.reading_time}
           recordSeconds={q.answering_time}
+          text={q.text}
           subsection={sub}
           onNext={onNext}
         />
@@ -397,7 +401,14 @@ function renderQuestionComponent(q, onNext, remainingTime) {
       );
 
     case "reorder_paragraphs":
-      return <ReorderParagraphs key={id} items={q.options} onNext={onNext} />;
+      return (
+        <ReorderParagraphs
+          key={id}
+          items={q.options}
+          onNext={onNext}
+          
+        />
+      );
 
     // --- Listening ---
     case "summarize_spoken_text":
