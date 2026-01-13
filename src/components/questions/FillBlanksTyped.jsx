@@ -11,7 +11,7 @@ export default function FillBlanksTyped({
   output,
   prepSeconds = 5,
   textString = "", 
-  durationSeconds = 60,
+  durationSeconds ,
   subsection = "Listening: Fill in the Blanks",
 }) {
   const setPhase = useExamStore((s) => s.setPhase);
@@ -65,16 +65,20 @@ export default function FillBlanksTyped({
 
   const handleAudioEnd = () => setStatus("ANSWER");
 
+  // --- UPDATED PHASE LOGIC ---
   useEffect(() => {
     setAnswerKey("answer", values.join("|"));
-    const atLeastOneFilled = values.some((val) => val.trim() !== "");
 
-    if (isSectionExpired || atLeastOneFilled) {
+    // The button is enabled ONLY if the section timer expired 
+    // OR the audio has finished playing (status is ANSWER or FINISHED)
+    const audioIsDone = status === "ANSWER" || status === "FINISHED";
+    
+    if (isSectionExpired || audioIsDone) {
       setPhase("finished"); 
     } else {
-      setPhase("prep"); 
+      setPhase("prep"); // Keeps Next button disabled during LOADING, PREP, and PLAYING
     }
-  }, [values, isSectionExpired, setPhase, setAnswerKey]);
+  }, [values, status, isSectionExpired, setPhase, setAnswerKey]);
 
   return (
     <div className="space-y-4 md:space-y-6 max-w-full overflow-hidden">
@@ -114,9 +118,9 @@ export default function FillBlanksTyped({
         )}
 
         {(status === "ANSWER" || status === "FINISHED") && (
-          <div className="text-sky-600 font-bold uppercase text-[9px] md:text-[10px] tracking-widest flex items-center gap-2 bg-sky-50 px-4 md:px-6 py-2 rounded-full border border-sky-100">
-            <PencilLine className="w-3 h-3 md:w-4 md:h-4" /> 
-            {status === "FINISHED" ? "Time Up" : `Answer Phase: ${answerLeft}s`}
+          <div className="text-green-600 font-bold uppercase text-[9px] md:text-[10px] tracking-widest flex items-center gap-2 bg-green-50 px-4 md:px-6 py-2 rounded-full border border-green-100 animate-in zoom-in">
+            <CheckCircle2 className="w-3 h-3 md:w-4 md:h-4" /> 
+            {status === "FINISHED" ? "Time Up - Proceed" : `Audio Finished: ${answerLeft}s Left`}
           </div>
         )}
 
@@ -135,7 +139,7 @@ export default function FillBlanksTyped({
         />
       </div>
 
-      {/* Main Text Area - Responsive Font & Leading */}
+      {/* Main Text Area */}
       <div className="rounded-2xl md:rounded-3xl border border-gray-100 p-6 md:p-12 bg-white shadow-sm text-base md:text-xl leading-[3.5rem] md:leading-[4.5rem] text-gray-700">
         {segments.map((seg, i) => (
           <React.Fragment key={i}>
@@ -159,20 +163,17 @@ export default function FillBlanksTyped({
         ))}
       </div>
       
-      {/* Help text */}
+      {/* Footer Info */}
       <div className="flex flex-col items-center gap-2 pb-6">
-          {values.some(v => v.trim() !== "") ? (
-            <div className="flex items-center gap-2 text-green-600 text-[11px] md:text-sm font-bold animate-in fade-in zoom-in">
-                <CheckCircle2 className="w-4 h-4" /> Ready to proceed
-            </div>
+          {status === "PLAYING" || status === "PREP" ? (
+             <p className="text-[10px] md:text-xs text-amber-600 font-bold animate-pulse">
+               NEXT BUTTON WILL UNLOCK AFTER AUDIO
+             </p>
           ) : (
-            <p className="text-[10px] md:text-xs text-slate-400 italic font-medium tracking-tight text-center">
-                * Type at least one word to enable the Next button.
+            <p className="text-[9px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest">
+              {values.filter(v => v.trim() !== "").length} OF {blankCount} BLANKS COMPLETED
             </p>
           )}
-          <p className="text-[9px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest">
-            {values.filter(v => v.trim() !== "").length} OF {blankCount} BLANKS COMPLETED
-          </p>
       </div>
     </div>
   );

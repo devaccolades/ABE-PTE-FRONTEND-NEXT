@@ -3,9 +3,8 @@ import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { useExamStore } from "@/store";
-import { Headphones, Volume2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Headphones, Volume2, CheckCircle2, AlertCircle, PlayCircle } from "lucide-react";
 
-// --- Timer Hooks & UI ---
 import { useSectionTimer } from "../hooks/useSectionTimer";
 import SectionTimerDisplay from "../ui/SectionTimerDisplay";
 
@@ -21,17 +20,14 @@ export default function SummarizeTheText({
   const [stage, setStage] = useState("PREP"); 
   const [prepLeft, setPrepLeft] = useState(prepSeconds);
   const [userInput, setUserInput] = useState("");
+  const [isBlocked, setIsBlocked] = useState(false); 
   const audioRef = useRef(null);
 
-  const handleSectionTimeExpired = useCallback(() => {
-    console.log("Section expired");
-  }, []);
-
-  const { formattedTime, isExpired: isSectionExpired } = useSectionTimer(handleSectionTimeExpired);
+  const { formattedTime, isExpired: isSectionExpired } = useSectionTimer();
 
   const wordLimit = useMemo(() => {
     if (subsection === "summarize_spoken_text") return 70;
-    return 1000;
+    // return 1000; 
   }, [subsection]);
 
   const getWordCount = (text) => {
@@ -40,6 +36,16 @@ export default function SummarizeTheText({
   };
 
   const currentCount = getWordCount(userInput);
+
+  // 1. Next Button Strategy: 
+  // We keep the phase as "prep" (disabled) until the audio finishes.
+  useEffect(() => {
+    if (stage === "WRITING" && !isSectionExpired) {
+      setPhase("writing"); // This enables the "Next" button in ExamShell
+    } else {
+      setPhase("prep"); // Keeps "Next" disabled during PREP and PLAYING
+    }
+  }, [stage, setPhase, isSectionExpired]);
 
   // Preparation Countdown
   useEffect(() => {
@@ -52,119 +58,116 @@ export default function SummarizeTheText({
     return () => clearTimeout(timer);
   }, [prepLeft, stage]);
 
-  // Audio Playback
+  // 2. Automatic Audio Playback
   useEffect(() => {
     if (stage === "PLAYING" && audioRef.current) {
-      audioRef.current.play().catch((err) => {
-        console.warn("Autoplay blocked:", err);
-        setStage("WRITING");
-      });
+      const playPromise = audioRef.current.play();
+      
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            setIsBlocked(false);
+          })
+          .catch((err) => {
+            // If the browser blocks it, we HAVE to show a button as a fallback.
+            // There is no technical way to bypass a browser's security block without a click.
+            console.warn("Autoplay blocked:", err);
+            setIsBlocked(true); 
+          });
+      }
     }
   }, [stage]);
 
-  const handleAudioEnd = () => setStage("WRITING");
+  const handleAudioEnd = () => {
+    setStage("WRITING");
+  };
 
   const handleTextChange = (e) => {
     const newText = e.target.value;
-    const newCount = getWordCount(newText);
-    if (newCount > wordLimit && newCount >= currentCount) return; 
     setUserInput(newText);
+    setAnswerKey("answer", newText);
   };
 
-  useEffect(() => {
-    setAnswerKey("answer", userInput);
-    if (isSectionExpired || (stage === "WRITING" && userInput.trim().length > 0)) {
-      setPhase("finished");
-    } else {
-      setPhase("prep");
-    }
-  }, [userInput, stage, isSectionExpired, setAnswerKey, setPhase]);
-
   return (
-    <div className="space-y-4 md:space-y-6 max-w-full overflow-hidden">
-      {/* HEADER */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-3 md:pb-4 gap-3">
+    <div className="space-y-4 md:space-y-6 max-w-full">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 gap-3">
         <div className="flex items-center gap-2 text-sky-700">
-           <Headphones className="w-5 h-5 shrink-0" />
-           <h2 className="text-lg md:text-xl font-bold uppercase tracking-tight truncate">
+           <Headphones className="w-5 h-5" />
+           <h2 className="text-lg md:text-xl font-bold uppercase tracking-tight">
              {subsection.replace(/_/g, " ")}
            </h2>
         </div>
-        <SectionTimerDisplay 
-          formattedTime={formattedTime} 
-          isExpired={isSectionExpired} 
-        />
+        <SectionTimerDisplay formattedTime={formattedTime} isExpired={isSectionExpired} />
       </div>
 
-      {/* AUDIO STATUS CARD - Compact on Mobile */}
-      <div className={`bg-white rounded-xl border border-gray-200 p-5 md:p-8 shadow-sm flex flex-col items-center justify-center min-h-[120px] md:min-h-[160px] space-y-4 transition-all ${isSectionExpired ? "opacity-60" : ""}`}>
+      <div className="bg-white rounded-xl border border-gray-200 p-5 md:p-8 shadow-sm flex flex-col items-center justify-center min-h-[160px] space-y-4">
         
         {stage === "PREP" && (
-          <div className="w-full max-w-xs md:max-w-md text-center space-y-3">
-            <p className="text-[10px] md:text-xs font-black text-amber-600 uppercase tracking-[0.2em]">
-              Beginning in {prepLeft}s
+          <div className="w-full max-w-md text-center space-y-3">
+            <p className="text-xs font-black text-amber-600 uppercase tracking-widest">
+              Audio begins in {prepLeft}s
             </p>
-            <Progress value={(prepLeft / prepSeconds) * 100} className="h-1.5 md:h-2 bg-amber-50" />
+            <Progress value={(prepLeft / prepSeconds) * 100} className="h-2 bg-amber-50" />
           </div>
         )}
 
         {stage === "PLAYING" && (
           <div className="flex flex-col items-center space-y-2 text-sky-600">
-            <div className="h-10 w-10 md:h-12 md:w-12 bg-sky-50 rounded-full flex items-center justify-center animate-pulse">
-               <Volume2 className="w-5 h-5 md:w-6 md:h-6" />
-            </div>
-            <p className="font-bold text-xs md:text-sm uppercase tracking-widest">Playing Audio</p>
+            {isBlocked ? (
+              /* Fallback UI: If browser blocks autoplay, user must click this once */
+              <button 
+                onClick={() => audioRef.current?.play().then(() => setIsBlocked(false))}
+                className="flex flex-col items-center gap-2 text-amber-600 animate-pulse"
+              >
+                <PlayCircle className="w-12 h-12" />
+                <p className="font-bold text-xs">Browser blocked autoplay. Click to play.</p>
+              </button>
+            ) : (
+              <>
+                <div className="h-12 w-12 bg-sky-50 rounded-full flex items-center justify-center animate-pulse">
+                   <Volume2 className="w-6 h-6" />
+                </div>
+                <p className="font-bold text-sm uppercase tracking-widest">Playing Audio...</p>
+              </>
+            )}
           </div>
         )}
 
         {stage === "WRITING" && (
-          <div className="text-green-600 font-bold flex flex-col md:flex-row items-center gap-2 text-center text-xs md:text-sm">
-            <CheckCircle2 className="h-5 w-5 md:h-6 md:w-6 animate-in zoom-in" />
-            Audio complete. Write your summary below.
+          <div className="text-green-600 font-bold flex items-center gap-2">
+            <CheckCircle2 className="h-6 w-6" />
+            Audio complete. Next button enabled.
           </div>
         )}
 
         <audio ref={audioRef} src={audioUrl} onEnded={handleAudioEnd} className="hidden" />
       </div>
 
-      {/* INPUT AREA */}
       <div className="relative space-y-3">
         <Textarea
-          placeholder={
-            isSectionExpired 
-              ? "Time has expired." 
-              : stage === "WRITING" 
-                ? `Write your summary here (Max ${wordLimit} words)...` 
-                : "The summary box will unlock after the audio ends."
-          }
-          className={`min-h-[200px] md:min-h-[280px] text-base md:text-lg p-4 md:p-6 transition-all resize-none shadow-inner ${
-            currentCount >= wordLimit ? "border-red-400 focus-visible:ring-red-500" : "focus-visible:ring-sky-500"
+          placeholder={stage === "WRITING" ? "Write your summary here..." : "Wait for audio to finish..."}
+          className={`min-h-[250px] text-lg p-6 transition-all ${
+            currentCount > wordLimit ? "border-red-400 bg-red-50/10" : "focus-visible:ring-sky-500"
           }`}
           value={userInput}
           onChange={handleTextChange}
           disabled={stage !== "WRITING" || isSectionExpired}
         />
         
-        {/* FOOTER - Adaptive Layout */}
-        <div className="flex flex-col md:flex-row justify-between items-center gap-3 px-1">
-          <div className={`px-3 py-1.5 rounded-md border text-[11px] md:text-xs transition-colors w-full md:w-auto text-center ${
-            currentCount >= wordLimit ? "bg-red-50 border-red-200 text-red-700" : "bg-slate-100 border-slate-200 text-slate-500"
+        <div className="flex justify-between items-center px-1">
+          <div className={`px-4 py-2 rounded-full border text-xs font-bold ${
+            currentCount > wordLimit ? "bg-red-600 text-white" : "bg-slate-800 text-white"
           }`}>
-            Word count: <span className="font-bold">{currentCount} / {wordLimit}</span>
+            Word count: {currentCount} / {wordLimit}
           </div>
 
-          {isSectionExpired && (
-            <div className="flex items-center gap-2 text-red-600 font-bold text-[11px] md:text-xs animate-pulse uppercase">
+          {currentCount > wordLimit && (
+            <div className="flex items-center gap-2 text-red-600 font-bold text-xs animate-bounce uppercase">
               <AlertCircle className="w-4 h-4" />
-              Section time expired. Answer locked.
+              Limit exceeded
             </div>
           )}
         </div>
-
-        {/* Disabled Overlay Visual */}
-        {isSectionExpired && (
-          <div className="absolute inset-0 bg-white/10 backdrop-blur-[0.5px] rounded-md pointer-events-none" />
-        )}
       </div>
     </div>
   );

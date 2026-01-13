@@ -55,6 +55,7 @@ export default function AudioHighlightBox({
     }
   };
 
+  // --- UPDATED NEXT BUTTON LOGIC ---
   useEffect(() => {
     const selectedWords = Array.from(highlighted)
       .map((idx) => tokens[idx].value)
@@ -62,14 +63,19 @@ export default function AudioHighlightBox({
 
     setAnswerKey("answer", selectedWords);
 
-    if (isSectionExpired || highlighted.size > 0) {
+    // Condition: Enable "Next" if the section expired OR the audio status is "FINISHED"
+    // It no longer depends on whether a word is highlighted (highlighted.size)
+    const canMoveToNext = isSectionExpired || status === "FINISHED";
+
+    if (canMoveToNext) {
       setPhase("finished");
     } else {
       setPhase("prep");
     }
-  }, [highlighted, isSectionExpired, setPhase, setAnswerKey, tokens]);
+  }, [highlighted, status, isSectionExpired, setPhase, setAnswerKey, tokens]);
 
   const toggleHighlight = (idx) => {
+    // Allows highlighting during "PLAYING" and "FINISHED" stages
     if (status === "LOADING" || status === "PREP" || isSectionExpired) return;
 
     setHighlighted((prev) => {
@@ -82,7 +88,6 @@ export default function AudioHighlightBox({
 
   return (
     <div className="space-y-4 md:space-y-6 max-w-full overflow-hidden">
-      {/* Responsive Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-3 md:pb-4 gap-3">
         <div className="flex items-center gap-2 text-sky-700">
           <Headphones className="w-5 h-5 shrink-0" />
@@ -93,7 +98,6 @@ export default function AudioHighlightBox({
         <SectionTimerDisplay formattedTime={formattedTime} isExpired={isSectionExpired} />
       </div>
 
-      {/* Playback Status Card - Adaptive Padding */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 md:p-8 shadow-sm flex flex-col items-center justify-center min-h-[120px] md:min-h-[140px] space-y-4 transition-all">
         {status === "PREP" && (
           <div className="w-full max-w-xs md:max-w-md text-center space-y-3">
@@ -120,7 +124,7 @@ export default function AudioHighlightBox({
           <div className="flex items-center gap-2 text-green-600 bg-green-50 px-4 md:px-6 py-2 rounded-full border border-green-100 animate-in fade-in zoom-in">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
             <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest">
-              Listening Phase Complete
+              Listening Phase Complete - You may proceed
             </span>
           </div>
         )}
@@ -145,7 +149,6 @@ export default function AudioHighlightBox({
         />
       </div>
 
-      {/* Paragraph Content - Adjusted leading and text size for mobile */}
       <div className="rounded-2xl md:rounded-3xl border border-gray-100 p-5 md:p-10 bg-white shadow-xl text-gray-800 leading-[2.5rem] md:leading-[3.5rem] text-lg md:text-xl transition-all">
         {tokens.map((t, idx) => {
           if (!t.isWord) {
@@ -157,7 +160,7 @@ export default function AudioHighlightBox({
               key={idx}
               type="button"
               onClick={() => toggleHighlight(idx)}
-              disabled={status === "PREP" || status === "LOADING" || isSectionExpired}
+              disabled={status === "LOADING" || status === "PREP" || isSectionExpired}
               className={`
                 inline-block px-1 mx-0.5 rounded transition-all duration-200
                 ${isHighlighted ? "bg-yellow-300 text-black shadow-sm scale-110" : "bg-transparent active:bg-gray-200 md:hover:bg-gray-100"}
@@ -171,10 +174,11 @@ export default function AudioHighlightBox({
       </div>
 
       <div className="flex flex-col items-center gap-2 px-4">
-        <p className="text-center text-[11px] md:text-sm font-medium text-gray-400 italic leading-snug">
-          * Select the words in the text that differ from what is said. 
-          <br className="hidden md:block" /> You must highlight at least one word to continue.
-        </p>
+        {status !== "FINISHED" && !isSectionExpired && (
+           <p className="text-center text-[10px] md:text-xs font-bold text-amber-600 uppercase tracking-widest animate-pulse">
+             The Next button will unlock after the audio finishes
+           </p>
+        )}
         
         {highlighted.size > 0 && (
           <div className="text-[10px] font-black text-sky-600 uppercase tracking-widest bg-sky-50 px-3 py-1 rounded">
@@ -186,7 +190,6 @@ export default function AudioHighlightBox({
   );
 }
 
-/* ---- Tokenizer Helper ---- */
 function tokenize(str) {
   if (!str) return [];
   const regex = /([A-Za-z0-9\u00C0-\u017F'\-]+)|(\s+|[^\sA-Za-z0-9\u00C0-\u017F'\-]+)/g;
