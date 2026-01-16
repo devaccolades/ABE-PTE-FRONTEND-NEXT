@@ -12,8 +12,8 @@ export const useExamStore = create((set, get) => ({
   stopSignal: false,
   remainingTime: 0,
   startExam: false,
-  // baseUrl: "https://admin.pte.abeedu.com/mocktest/",
-  baseUrl: "https://admin.abepte.accoladesweb.com/mocktest/",
+  baseUrl: "https://admin.pte.abeedu.com/mocktest/",
+  // baseUrl: "https://admin.abepte.accoladesweb.com/mocktest/",
   // baseUrl: "http://192.168.29.96:8000/mocktest/",
   answer: {
     session_id: "",
