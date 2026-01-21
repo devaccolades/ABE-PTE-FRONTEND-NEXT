@@ -10,10 +10,11 @@ export default function NameGate() {
   const [mocktestList, setMocktestList] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const setUserName = useExamStore((s) => s.setUserName);
   const setSessionId = useExamStore((s) => s.setSessionId);
   const setMockTestId = useExamStore((s) => s.setMockTestId);
   const baseUrl = useExamStore((s) => s.baseUrl);
+
+  const { setUserName } = useExamStore();
 
   const [selectedTest, setSelectedTest] = useState(null);
   const canContinue = name.trim().length >= 2 && selectedTest;

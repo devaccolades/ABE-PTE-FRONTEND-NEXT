@@ -31,7 +31,7 @@ import PreExam from "./questions/PreExam";
 
 export default function ExamShell({ mocktestList }) {
   const {
-    userName,
+    // userName,
     sessionId,
     setSessionId,
     baseUrl,
@@ -43,6 +43,9 @@ export default function ExamShell({ mocktestList }) {
     setStopSignal,
     resetAnswer,
   } = useExamStore();
+
+  const userName = useExamStore((state) => state.userName);
+  const setUserName = useExamStore((s) => s.setUserName);
 
   const questionSection = useExamStore((state) => state.questionSection);
   const setQuestionSection = useExamStore((state) => state.setQuestionSection);
@@ -60,6 +63,13 @@ export default function ExamShell({ mocktestList }) {
     setStartExam, // <--- Change: This replaces setExamStarted
     // ... rest of your store items
   } = useExamStore();
+
+  useEffect(() => {
+    if (!userName) {
+      const storedName = localStorage.getItem("exam_user_name");
+      if (storedName) setUserName(storedName);
+    }
+  }, [userName, setUserName]);
 
   useEffect(() => {
     const savedStatus = localStorage.getItem("startExam");
@@ -131,7 +141,7 @@ export default function ExamShell({ mocktestList }) {
       setRemainingTime,
       questionSection,
       setPhase,
-    ]
+    ],
   );
 
   // --- 2. Rehydration ---
@@ -149,7 +159,7 @@ export default function ExamShell({ mocktestList }) {
     if (!rehydrated || !sessionId) return;
     const resumeUrl = localStorage.getItem("current_question");
     loadQuestion(
-      resumeUrl || `${baseUrl}get-question/?session_id=${sessionId}`
+      resumeUrl || `${baseUrl}get-question/?session_id=${sessionId}`,
     );
   }, [rehydrated, sessionId, baseUrl, loadQuestion]);
 
@@ -230,7 +240,7 @@ export default function ExamShell({ mocktestList }) {
       <Card className="w-full max-w-4xl mx-auto shadow-lg border-none md:border sm:rounded-xl rounded-none">
         {/* Header: Adjusted padding and text size for mobile */}
         <CardHeader className="bg-slate-50 p-4 md:p-6">
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 w-full">
             <CardTitle className="text-sky-800 text-lg md:text-xl">
               {titleFor(currentQuestion.subsection)}
             </CardTitle>
@@ -253,7 +263,7 @@ export default function ExamShell({ mocktestList }) {
             {renderQuestionComponent(
               currentQuestion,
               handleModalNext,
-              remainingTime
+              remainingTime,
             )}
           </div>
 
@@ -401,14 +411,7 @@ function renderQuestionComponent(q, onNext, remainingTime) {
       );
 
     case "reorder_paragraphs":
-      return (
-        <ReorderParagraphs
-          key={id}
-          items={q.options}
-          onNext={onNext}
-          
-        />
-      );
+      return <ReorderParagraphs key={id} items={q.options} onNext={onNext} />;
 
     // --- Listening ---
     case "summarize_spoken_text":
