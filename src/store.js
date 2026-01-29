@@ -23,6 +23,7 @@ export const useExamStore = create((set, get) => ({
   },
   phase: "prep",
   isStopSignalSent: false, // <-- NEW STATE VARIABLE
+  isTimeExpired: false,
 
   setStartExam: (value) => set({ startExam: value }),
   // Set any top-level key of `answer`
@@ -68,6 +69,7 @@ export const useExamStore = create((set, get) => ({
   setNextQuestion: (question) => set({ nextQuestion: question }),
   // nextQuestion: () => set({ questionIndex: get().questionIndex + 1 }),
   setSessionId: (id) => set({ sessionId: id }),
+  setIsTimeExpired: (time) => set({ isTimeExpired: time }),
   resetExam: () => set({ currentStep: "exam", questionIndex: 0, answers: [] }),
 }));
 

@@ -46,6 +46,7 @@ export default function ExamShell({ mocktestList }) {
 
   const userName = useExamStore((state) => state.userName);
   const setUserName = useExamStore((s) => s.setUserName);
+  const isTimeExpired = useExamStore((s) => s.isTimeExpired);
 
   const questionSection = useExamStore((state) => state.questionSection);
   const setQuestionSection = useExamStore((state) => state.setQuestionSection);
@@ -70,6 +71,29 @@ export default function ExamShell({ mocktestList }) {
       if (storedName) setUserName(storedName);
     }
   }, [userName, setUserName]);
+
+  // const sectionJump = async () => {
+  //   const response = await fetch(
+  //     `${baseUrl}question/?session_id=${sessionId}`,
+  //     {
+  //       method: "GET",
+  //       headers: {
+  //         "timer-exceeded": true,
+  //       },
+  //     },
+  //   );
+  //   const data = await response.json();
+  //   // console.log("jump", data);
+  //   setNextQuestion(data.next);
+  //   console.log("next question setup");
+  // };
+
+  // useEffect(() => {
+  //   if (isTimeExpired) {
+  //     handleModalNext();
+  //     // sectionJump();
+  //   }
+  // }, [isTimeExpired]);
 
   useEffect(() => {
     const savedStatus = localStorage.getItem("startExam");
@@ -216,7 +240,14 @@ export default function ExamShell({ mocktestList }) {
       setStopSignal(false);
       resetAnswer(); // Ensure this clears both 'answer' and 'answer_audio'
 
+      // if (isTimeExpired) {
+      //   // handleModalNext()
+      //   console.log("time expired", isTimeExpired);
+      //   sectionJump();
+      // }
+
       if (nextQuestionUrl) {
+        console.log("next question loaded", nextQuestionUrl);
         loadQuestion(nextQuestionUrl);
       } else {
         setLoading(false);
