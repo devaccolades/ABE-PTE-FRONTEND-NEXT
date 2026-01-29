@@ -8,7 +8,7 @@ export default function FillBlanksDragDrop({
   segments = "",
   options = [],
   subsection = "Reading: Fill in the Blanks",
-  questionId
+  questionId,
 }) {
   const setPhase = useExamStore((s) => s.setPhase);
   const setAnswerKey = useExamStore((s) => s.setAnswerKey);
@@ -20,9 +20,12 @@ export default function FillBlanksDragDrop({
     console.log("Time expired");
   }, []);
 
-  const { formattedTime, isExpired: isSectionExpired } = useSectionTimer(handleSectionTimeExpired);
+  const { formattedTime, isExpired: isSectionExpired } = useSectionTimer(
+    handleSectionTimeExpired,
+  );
 
-  const textParts = useMemo(() => segments.split(/----/g), [segments]);
+  const textParts = useMemo(() => segments.split(/----|_{2,}/g), [segments]);
+
   const totalBlanks = textParts.length - 1;
 
   const availableOptions = useMemo(() => {
@@ -92,7 +95,9 @@ export default function FillBlanksDragDrop({
         next[targetBlankNumber] = option;
         return next;
       });
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const onDropOnPool = (e) => {
@@ -110,14 +115,21 @@ export default function FillBlanksDragDrop({
   return (
     <div className="space-y-4 md:space-y-6 max-w-full">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 gap-3">
-        <h2 className="text-lg md:text-xl font-bold text-gray-800 uppercase tracking-tight">{subsection}</h2>
-        <SectionTimerDisplay formattedTime={formattedTime} isExpired={isSectionExpired} />
+        <h2 className="text-lg md:text-xl font-bold text-gray-800 uppercase tracking-tight">
+          {subsection}
+        </h2>
+        <SectionTimerDisplay
+          formattedTime={formattedTime}
+          isExpired={isSectionExpired}
+        />
       </div>
 
       {/* MOBILE INSTRUCTION */}
       {!isSectionExpired && (
         <p className="block md:hidden text-[10px] text-center text-sky-600 font-bold uppercase bg-sky-50 py-1 rounded">
-          {selectedOption ? `Now tap a blank to place "${selectedOption.option_text}"` : "Tap a word, then tap a blank"}
+          {selectedOption
+            ? `Now tap a blank to place "${selectedOption.option_text}"`
+            : "Tap a word, then tap a blank"}
         </p>
       )}
 
@@ -142,8 +154,8 @@ export default function FillBlanksDragDrop({
       </div>
 
       {/* OPTIONS POOL */}
-      <div 
-        className={`p-4 md:p-6 bg-slate-50 rounded-xl border-2 border-dashed transition-colors ${selectedOption ? 'border-sky-400 bg-sky-50/50' : 'border-slate-200'}`}
+      <div
+        className={`p-4 md:p-6 bg-slate-50 rounded-xl border-2 border-dashed transition-colors ${selectedOption ? "border-sky-400 bg-sky-50/50" : "border-slate-200"}`}
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDropOnPool}
       >
@@ -159,7 +171,9 @@ export default function FillBlanksDragDrop({
             />
           ))}
           {availableOptions.length === 0 && (
-            <div className="text-slate-400 text-sm italic py-2">All words placed</div>
+            <div className="text-slate-400 text-sm italic py-2">
+              All words placed
+            </div>
           )}
         </div>
       </div>
@@ -169,21 +183,37 @@ export default function FillBlanksDragDrop({
 
 // --- SUB-COMPONENTS ---
 
-function DropTarget({ blankNumber, filledValue, onDrop, onDragStart, onClick, disabled, isWaitingForPlacement }) {
+function DropTarget({
+  blankNumber,
+  filledValue,
+  onDrop,
+  onDragStart,
+  onClick,
+  disabled,
+  isWaitingForPlacement,
+}) {
   const [isOver, setIsOver] = useState(false);
 
   return (
     <span
       onClick={onClick}
-      onDragOver={(e) => { e.preventDefault(); if(!disabled) setIsOver(true); }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        if (!disabled) setIsOver(true);
+      }}
       onDragLeave={() => setIsOver(false)}
-      onDrop={(e) => { setIsOver(false); onDrop(e, blankNumber); }}
+      onDrop={(e) => {
+        setIsOver(false);
+        onDrop(e, blankNumber);
+      }}
       className={`
         mx-1 md:mx-2 inline-flex items-center justify-center align-middle
         min-w-[100px] md:min-w-[140px] h-8 md:h-10 px-2 md:px-3 rounded md:rounded-md border-2 transition-all
-        ${filledValue 
-          ? "bg-sky-600 border-sky-600 text-white font-medium shadow-sm" 
-          : "bg-gray-50 border-gray-300 border-dashed"}
+        ${
+          filledValue
+            ? "bg-sky-600 border-sky-600 text-white font-medium shadow-sm"
+            : "bg-gray-50 border-gray-300 border-dashed"
+        }
         ${isOver || (isWaitingForPlacement && !filledValue) ? "border-sky-500 bg-sky-100" : ""}
         ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
       `}
@@ -195,7 +225,13 @@ function DropTarget({ blankNumber, filledValue, onDrop, onDragStart, onClick, di
   );
 }
 
-function DraggableOption({ option, onDragStart, onClick, disabled, isSelected }) {
+function DraggableOption({
+  option,
+  onDragStart,
+  onClick,
+  disabled,
+  isSelected,
+}) {
   return (
     <div
       draggable={!disabled}
@@ -205,9 +241,11 @@ function DraggableOption({ option, onDragStart, onClick, disabled, isSelected })
         px-3 py-1.5 md:px-5 md:py-2.5 border-2 rounded-lg shadow-sm
         text-sm md:text-base font-semibold select-none transition-all
         ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-grab active:scale-95"}
-        ${isSelected 
-          ? "bg-sky-500 border-sky-600 text-white ring-2 ring-sky-200" 
-          : "bg-white border-gray-200 text-gray-700 hover:border-sky-400"}
+        ${
+          isSelected
+            ? "bg-sky-500 border-sky-600 text-white ring-2 ring-sky-200"
+            : "bg-white border-gray-200 text-gray-700 hover:border-sky-400"
+        }
       `}
     >
       {option.option_text}
