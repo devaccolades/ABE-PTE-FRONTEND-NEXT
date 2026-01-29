@@ -45,13 +45,21 @@ export default function ReadAloud({
   }, [setAnswerKey, promptText]);
 
   // --- 3. Global Section Timer ---
+
   const handleSectionTimeExpired = useCallback(() => {
     stopAudio();
   }, [stopAudio]);
 
   const { formattedTime, isExpired: isSectionExpired } = useSectionTimer(
-    handleSectionTimeExpired
+    handleSectionTimeExpired,
   );
+
+  // useEffect(() => {
+  //   if (isSectionExpired) {
+  //     setStopSignal(true);
+  //     console.log("time end ");
+  //   }
+  // }, [isSectionExpired]);
 
   // --- 4. Recording Timer Logic ---
   const timerHook = useRecordingTimer(
@@ -69,7 +77,7 @@ export default function ReadAloud({
       stopAudio();
       timerHook.setPhase(PHASES.FINISHED);
     },
-    promptText
+    promptText,
   );
 
   const { phase, prepLeft, recLeft, prepProgress, recProgress } = timerHook;
@@ -83,7 +91,7 @@ export default function ReadAloud({
           await stopAudio();
         }
         timerHook.setPhase(PHASES.FINISHED);
-        
+
         // Acknowledge the signal back to ExamShell
         setStopSignal(false);
       };
@@ -151,7 +159,9 @@ export default function ReadAloud({
       {recorderError && (
         <div className="flex items-center gap-2 text-red-600 bg-red-50 p-3 rounded-lg border border-red-100">
           <AlertCircle className="w-4 h-4 shrink-0" />
-          <span className="text-xs font-semibold uppercase">{recorderError}</span>
+          <span className="text-xs font-semibold uppercase">
+            {recorderError}
+          </span>
         </div>
       )}
 

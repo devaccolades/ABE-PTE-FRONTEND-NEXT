@@ -15,8 +15,8 @@ export default function WriteEssay({ promptText, questionId, subsection }) {
   const [localText, setLocalText] = useState("");
 
   const wordLimit = useMemo(() => {
-    if (subsection === "summarize_written_text") return 75; // PTE standard is usually 75 for SWT
-    if (subsection === "write_essay") return 300; // PTE standard is usually 200-300
+    if (subsection === "summarize_written_text") return 75;
+    if (subsection === "write_essay") return 300;
     return 500;
   }, [subsection]);
 
@@ -35,9 +35,6 @@ export default function WriteEssay({ promptText, questionId, subsection }) {
 
   const handleTextChange = (e) => {
     const newText = e.target.value;
-    
-    // REMOVED THE BLOCKING LOGIC: User can now type as much as they want.
-    
     setLocalText(newText);
     setAnswerKey("answer", newText);
 
@@ -74,14 +71,10 @@ export default function WriteEssay({ promptText, questionId, subsection }) {
         <Textarea
           value={localText}
           onChange={handleTextChange}
-          placeholder={`Write your response here... Suggested limit: ${wordLimit} words.`}
+          placeholder="Write your response here..."
           disabled={isSectionExpired}
           rows={12}
-          className={`text-sm md:text-base leading-relaxed p-3 md:p-4 resize-none focus:ring-2 min-h-[300px] md:min-h-[400px] border-gray-300 transition-all ${
-            currentCount > wordLimit
-              ? "border-amber-400 focus:ring-amber-500 bg-amber-50/10"
-              : "focus:ring-sky-500"
-          }`}
+          className="text-sm md:text-base leading-relaxed p-3 md:p-4 resize-none focus:ring-2 min-h-[300px] md:min-h-[400px] border-gray-300 transition-all focus:ring-sky-500"
         />
 
         {isSectionExpired && (
@@ -94,29 +87,19 @@ export default function WriteEssay({ promptText, questionId, subsection }) {
       </div>
 
       <div className="flex flex-col md:flex-row justify-between items-center gap-3 text-xs md:text-sm px-1">
-        <div
-          className={`px-4 py-2 rounded-full border transition-all duration-300 w-full md:w-auto text-center font-medium shadow-sm ${
-            currentCount > wordLimit
-              ? "bg-red-600 border-red-700 text-white shadow-red-200"
-              : "bg-slate-800 border-slate-900 text-white"
-          }`}
-        >
+        {/* Simplified Word Count Display */}
+        <div className="px-4 py-2 rounded-full border border-slate-900 bg-slate-800 text-white w-full md:w-auto text-center font-medium shadow-sm">
           Word count:{" "}
           <span className="font-bold text-base ml-1">
             {currentCount}
           </span>
-          <span className="opacity-70 ml-1">/ {wordLimit}</span>
+          <span className="opacity-70 ml-1"></span>
         </div>
 
+        {/* Dynamic Instructional Text */}
         {!isSectionExpired && phase === "prep" && (
-          <span className="text-amber-600 animate-pulse font-medium text-center">
+          <span className="text-gray-500 italic font-medium text-center">
             Start typing to enable the "Next" button...
-          </span>
-        )}
-
-        {currentCount > wordLimit && !isSectionExpired && (
-          <span className="text-red-600 font-bold animate-bounce text-center">
-            ⚠️ You have exceeded the word limit!
           </span>
         )}
       </div>
