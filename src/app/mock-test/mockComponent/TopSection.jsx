@@ -54,16 +54,18 @@ const TopSection = () => {
 
   return (
     <div
-      className={`h-[10vh] bg-[#f0fcff] absolute top-0 z-50  w-full transition-all duration-300 ease-in-out overflow-hidden  ${active ? "h-[50vh]" : "h-[10vh]"}`}
+      className={`h-[12vh] bg-[#f0fcff] absolute top-0 z-50  w-full transition-h duration-300 ease-in-out overflow-hidden p-5  ${active ? "h-full" : "h-[12vh]"}`}
       onClick={() => setActive(!active)}
     >
       {" "}
       <div className="w-[80%] mx-auto ">
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center h-[8vh]">
           <h1 className="text-[#0084d1] text-3xl font-bold py-5">Mock Test</h1>
-          <button className="bg-[#0084d1] py-2 px-4 text-white rounded-xl  w-fit h-fit">click for questions</button>
+          <button className="bg-[#0084d1] py-2 px-4 text-white rounded-xl  w-fit h-fit cursor-pointer">
+            click for questions
+          </button>
         </div>
-        <div className="flex justify-between items-start">
+        <div className="flex flex-wrap space-y-4 space-x-4 justify-between items-start mt-4">
           <div>
             <h2 className="text-xl font-semibold text-[#018dde] mb-1">
               Speaking
@@ -72,11 +74,11 @@ const TopSection = () => {
             <div className="space-y-1">
               {speaking.map((item) => (
                 <div
-                  className="cursor-pointer"
+                  className="cursor-pointer "
                   key={item.id}
                   onClick={() => handleClick(item.id, item.title)}
                 >
-                  {item.title}
+                  <p className="hover:text-[#018dde]">{item.title}</p>
                 </div>
               ))}
             </div>
@@ -95,7 +97,7 @@ const TopSection = () => {
                   key={item.id}
                   onClick={() => handleClick(item.id, item.title)}
                 >
-                  {item.title}
+                  <p className="hover:text-[#018dde]">{item.title}</p>
                 </div>
               ))}
             </div>
@@ -114,7 +116,7 @@ const TopSection = () => {
                   key={item.id}
                   onClick={() => handleClick(item.id, item.title)}
                 >
-                  {item.title}
+                  <p className="hover:text-[#018dde]">{item.title}</p>
                 </div>
               ))}
             </div>
@@ -133,7 +135,7 @@ const TopSection = () => {
                   key={item.id}
                   onClick={() => handleClick(item.id, item.title)}
                 >
-                  {item.title}
+                  <p className="hover:text-[#018dde]">{item.title}</p>
                 </div>
               ))}
             </div>

@@ -27,6 +27,7 @@ const SideBar = () => {
             `${baseUrl}all_questions/${currentQuestion}`,
           );
           const data = await response.json();
+          console.log(data);
           setQuestions(data);
         } catch (error) {
           console.error("Failed to fetch questions", error);
