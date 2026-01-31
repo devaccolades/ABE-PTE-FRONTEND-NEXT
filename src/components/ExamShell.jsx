@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useExamStore } from "@/store";
 
 // Components
@@ -31,7 +31,6 @@ import PreExam from "./questions/PreExam";
 
 export default function ExamShell({ mocktestList }) {
   const {
-    // userName,
     sessionId,
     setSessionId,
     baseUrl,
@@ -47,6 +46,7 @@ export default function ExamShell({ mocktestList }) {
   const userName = useExamStore((state) => state.userName);
   const setUserName = useExamStore((s) => s.setUserName);
   const isTimeExpired = useExamStore((s) => s.isTimeExpired);
+  const setIsTimeExpired = useExamStore((s) => s.setIsTimeExpired);
 
   const questionSection = useExamStore((state) => state.questionSection);
   const setQuestionSection = useExamStore((state) => state.setQuestionSection);
@@ -59,11 +59,11 @@ export default function ExamShell({ mocktestList }) {
   const [callAreYouSure, setCallAreYouSure] = useState(false);
   const [rehydrated, setRehydrated] = useState(false);
   const [displayName, setDisplayName] = useState("");
-  const {
-    startExam, // <--- Change: Read from store
-    setStartExam, // <--- Change: This replaces setExamStarted
-    // ... rest of your store items
-  } = useExamStore();
+
+  const { startExam, setStartExam } = useExamStore();
+
+  // 🔒 ADDITION: submission lock
+  const isSubmittingRef = useRef(false);
 
   useEffect(() => {
     if (!userName) {
@@ -72,28 +72,27 @@ export default function ExamShell({ mocktestList }) {
     }
   }, [userName, setUserName]);
 
-  // const sectionJump = async () => {
-  //   const response = await fetch(
-  //     `${baseUrl}question/?session_id=${sessionId}`,
-  //     {
-  //       method: "GET",
-  //       headers: {
-  //         "timer-exceeded": true,
-  //       },
-  //     },
-  //   );
-  //   const data = await response.json();
-  //   // console.log("jump", data);
-  //   setNextQuestion(data.next);
-  //   console.log("next question setup");
-  // };
+  const sectionJump = async () => {
+    const response = await fetch(
+      `${baseUrl}question/?session_id=${sessionId}`,
+      {
+        method: "GET",
+        headers: { "timer-exceeded": "true" },
+      },
+    );
 
-  // useEffect(() => {
-  //   if (isTimeExpired) {
-  //     handleModalNext();
-  //     // sectionJump();
-  //   }
-  // }, [isTimeExpired]);
+    if (!response.ok) return null;
+
+    const data = await response.json();
+
+    if (!data.next) {
+      await new Promise((r) => setTimeout(r, 500));
+      return sectionJump();
+    }
+
+    setNextQuestion(data.next);
+    return data.next;
+  };
 
   useEffect(() => {
     const savedStatus = localStorage.getItem("startExam");
@@ -101,7 +100,7 @@ export default function ExamShell({ mocktestList }) {
       setStartExam(true);
     }
   }, [setStartExam]);
-  // --- 1. Consolidated Loader ---
+
   const loadQuestion = useCallback(
     async (targetUrl) => {
       if (!targetUrl) {
@@ -120,28 +119,19 @@ export default function ExamShell({ mocktestList }) {
           return;
         }
 
-        // --- FIX STARTS HERE ---
-        setStopSignal(false); // Reset the stop signal for the new question
-        setPhase("prep"); // Reset phase to prep immediately
-        resetAnswer(); // Clear any old answer data
-        // --- FIX ENDS HERE ---
+        setStopSignal(false);
+        setPhase("prep");
+        resetAnswer();
 
         setCurrentQuestion(q);
         setQuestionSection(q.mocktest_section.section_name);
-        console.log("current Question", q.mocktest_section.section_name);
-        console.log("current Question", questionSection);
-        console.log("current Question", q);
-        console.log("next Question URL", data.next);
-        console.log("remain time from shell", remainingTime);
         setNextQuestion(data.next);
 
         localStorage.setItem("current_question", targetUrl);
         localStorage.setItem("next_question", data.next);
         localStorage.setItem("startExam", startExam);
-        // localStorage.setItem("remaining_time", remainingTime);
 
         if (q.mocktest_section.section_name !== questionSection) {
-          console.log("entered the section ");
           setQuestionSection(q.mocktest_section.section_name);
           setQuestionTimer(q.mocktest_section.total_duration);
           setRemainingTime(q.mocktest_section.total_duration);
@@ -168,12 +158,9 @@ export default function ExamShell({ mocktestList }) {
     ],
   );
 
-  // --- 2. Rehydration ---
   useEffect(() => {
     const storedSession = localStorage.getItem("exam_session_id");
     const storedName = localStorage.getItem("exam_user_name");
-    const remaining = localStorage.getItem("remaining_time");
-    // if (remaining) setRemainingTime(parseInt(remaining, 10));
     if (storedSession && !sessionId) setSessionId(storedSession);
     if (storedName) setDisplayName(storedName);
     setRehydrated(true);
@@ -187,37 +174,32 @@ export default function ExamShell({ mocktestList }) {
     );
   }, [rehydrated, sessionId, baseUrl, loadQuestion]);
 
-  // --- 3. Submission Logic ---
+  // --- Submission Logic ---
   const handleModalNext = async () => {
+    // 🔒 ADDITION: guard
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+
     setCallAreYouSure(false);
-    // 1. Check if the question is currently in a recording/active state
+
     const currentPhase = useExamStore.getState().phase;
 
-    // If not "finished", it means the user clicked Next while the timer was still running
-    console.log("phase", currentPhase);
-    // Logic: If it's not finished, we need to manually end the recording
     if (currentPhase === "recording" || currentPhase === "prep") {
       setStopSignal(true);
       setLoading(true);
-
-      // This pause is the "Safety Buffer" for the Audio Blob to be created
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
-    // 2. Now get the FRESH state (which now includes the blob from step 1)
     const finalAnswer = useExamStore.getState().answer;
 
-    // 3. Prepare FormData
     const formData = new FormData();
     formData.append("session_id", sessionId);
     formData.append("question_name", finalAnswer.question_name);
 
-    // Handle Audio: Only append if it's a valid Blob
     if (finalAnswer.answer_audio instanceof Blob) {
       formData.append("answer_audio", finalAnswer.answer_audio, "answer.webm");
     }
 
-    // Handle Text Answers
     if (finalAnswer.answer !== undefined && finalAnswer.answer !== null) {
       const answerVal =
         typeof finalAnswer.answer === "object"
@@ -227,39 +209,57 @@ export default function ExamShell({ mocktestList }) {
     }
 
     try {
-      console.log("answer", finalAnswer);
       const postRes = await fetch(`${baseUrl}user-response/`, {
         method: "POST",
         body: formData,
       });
-      console.log("remain time from shell after submission ", remainingTime);
 
       if (!postRes.ok) throw new Error("Submission Failed");
 
-      // 4. CLEANUP: Reset store for the next question
       setStopSignal(false);
-      resetAnswer(); // Ensure this clears both 'answer' and 'answer_audio'
+      resetAnswer();
 
-      // if (isTimeExpired) {
-      //   // handleModalNext()
-      //   console.log("time expired", isTimeExpired);
-      //   sectionJump();
-      // }
+      if (isTimeExpired) {
+        const jumpedNextUrl = await sectionJump();
+
+        if (jumpedNextUrl) {
+          await loadQuestion(jumpedNextUrl);
+        } else {
+          setLoading(false);
+          setCurrentQuestion(null);
+        }
+
+        // ✅ RESET HERE (IMPORTANT)
+        useExamStore.getState().setIsTimeExpired(false);
+
+        return;
+      }
 
       if (nextQuestionUrl) {
-        console.log("next question loaded", nextQuestionUrl);
         loadQuestion(nextQuestionUrl);
       } else {
         setLoading(false);
-        setCurrentQuestion(null); // Shows ExamCompleteScreen
+        setCurrentQuestion(null);
       }
     } catch (error) {
       console.error("Submission Error:", error);
-      alert("Submission failed. Please try again.");
       setLoading(false);
       setStopSignal(false);
+    } finally {
+      // 🔓 ADDITION: release lock
+      isSubmittingRef.current = false;
     }
   };
+
+  useEffect(() => {
+    if (!isTimeExpired) return;
+
+    const id = setTimeout(() => {
+      handleModalNext();
+    }, 0);
+
+    return () => clearTimeout(id);
+  }, [isTimeExpired, handleModalNext]);
 
   if (!displayName) return <NameGate mocktestList={mocktestList} />;
   if (loading && !currentQuestion) return <ExamLoadingSkeleton />;
