@@ -342,7 +342,7 @@ function renderQuestionComponent(QuestionId, q, onNext, remainingTime) {
           segments={q.sub_questions}
           onNext={onNext}
         />
-      );
+      );  
 
     case "fib_drag_drop":
       return (

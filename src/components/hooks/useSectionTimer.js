@@ -58,6 +58,7 @@ export function useSectionTimer(onTimeExpired) {
     const handleExpiry = () => {
       localStorage.setItem("section_time_left", "0");
       setGlobalRemainingTime(0);
+      console.log("time expires");
       setIsTimeExpired(true);
       if (onTimeExpired) {
         onTimeExpired();
