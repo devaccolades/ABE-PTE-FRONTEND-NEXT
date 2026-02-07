@@ -60,9 +60,11 @@ const TopSection = () => {
       {" "}
       <div className="w-[80%] mx-auto ">
         <div className="flex justify-between items-center h-[8vh] gap-1">
-          <h1 className="text-[#0084d1] text-2xl md:text-3xl font-bold py-5">Mock Test</h1>
+          <h1 className="text-[#0084d1] text-2xl md:text-3xl font-bold py-5">
+            Mock Test
+          </h1>
           <button className="bg-[#0084d1] py-2 px-4 text-white rounded-xl  w-fit h-fit cursor-pointer">
-            click for questions
+            Select Questions
           </button>
         </div>
         <div className="flex flex-wrap space-y-4 space-x-4 justify-between items-start mt-4">
