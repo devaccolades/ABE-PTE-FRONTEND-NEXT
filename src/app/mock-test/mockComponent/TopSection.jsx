@@ -54,13 +54,13 @@ const TopSection = () => {
 
   return (
     <div
-      className={`h-[12vh] bg-[#f0fcff] absolute top-0 z-50  w-full transition-h duration-300 ease-in-out overflow-hidden p-5  ${active ? "h-full" : "h-[12vh]"}`}
+      className={`bg-[#f0fcff] absolute top-0 z-50  w-full transition-h duration-300 ease-in-out overflow-hidden p-5  ${active ? "h-full" : "h-[10vh]"}`}
       onClick={() => setActive(!active)}
     >
       {" "}
       <div className="w-[80%] mx-auto ">
-        <div className="flex justify-between items-center h-[8vh]">
-          <h1 className="text-[#0084d1] text-3xl font-bold py-5">Mock Test</h1>
+        <div className="flex justify-between items-center h-[8vh] gap-1">
+          <h1 className="text-[#0084d1] text-2xl md:text-3xl font-bold py-5">Mock Test</h1>
           <button className="bg-[#0084d1] py-2 px-4 text-white rounded-xl  w-fit h-fit cursor-pointer">
             click for questions
           </button>
