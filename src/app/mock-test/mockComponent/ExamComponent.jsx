@@ -97,7 +97,7 @@ const ExamComponent = () => {
 
       if (!postRes.ok) throw new Error("Submission Failed");
 
-      toast.success("Successfully toasted!");
+      toast.success("Successfully completed the submission try next one!");
 
       // 4. CLEANUP: Reset store for the next question
       setStopSignal(false);
@@ -130,8 +130,8 @@ const ExamComponent = () => {
     //     </div>
     //   </div>
     // </div>
-    <div className="flex justify-center items-start h-[80vh] w-full relative mt-30">
-      <Toaster position="top-center" reverseOrder={false} />;
+    <div className="flex justify-center items-start h-[80vh] relative mt-56 md:mt-40 w-[90%] mx-auto">
+      <Toaster position="top-center" reverseOrder={false} />
       {!name && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-blue-900/40 backdrop-blur-sm">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 animate-fadeIn">
@@ -342,7 +342,7 @@ function renderQuestionComponent(QuestionId, q, onNext, remainingTime) {
           segments={q.sub_questions}
           onNext={onNext}
         />
-      );  
+      );
 
     case "fib_drag_drop":
       return (
