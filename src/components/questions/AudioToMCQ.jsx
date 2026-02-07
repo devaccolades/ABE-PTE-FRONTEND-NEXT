@@ -21,6 +21,7 @@ export default function AudioToMCQ({
   options = [],
   subsection = "Listening: Multiple Choice",
   questionId,
+  text,
 }) {
   const setPhase = useExamStore((s) => s.setPhase);
   const setAnswerKey = useExamStore((s) => s.setAnswerKey);
@@ -53,7 +54,9 @@ export default function AudioToMCQ({
     if (status !== "PREP") return;
     if (prepLeft <= 0) {
       setStatus("PLAYING");
-      audioRef.current?.play().catch((err) => console.warn("Autoplay blocked", err));
+      audioRef.current
+        ?.play()
+        .catch((err) => console.warn("Autoplay blocked", err));
       return;
     }
     const timer = setTimeout(() => setPrepLeft((prev) => prev - 1), 1000);
@@ -62,7 +65,11 @@ export default function AudioToMCQ({
 
   const handleSelection = (id) => {
     if (isSectionExpired) return;
-    const isSingleSelect = ["highlight_correct_summary", "l_mc_single", "select_missing_word"].includes(type);
+    const isSingleSelect = [
+      "highlight_correct_summary",
+      "l_mc_single",
+      "select_missing_word",
+    ].includes(type);
 
     if (isSingleSelect) {
       setSelectedIds(new Set([id]));
@@ -76,18 +83,21 @@ export default function AudioToMCQ({
 
   const pauseAllOptionAudios = () => {
     optionPlayersRef.current.forEach((player) => {
-      try { player.pause(); player.currentTime = 0; } catch (e) {}
+      try {
+        player.pause();
+        player.currentTime = 0;
+      } catch (e) {}
     });
   };
 
   // --- UPDATED PHASE LOGIC ---
   useEffect(() => {
     setAnswerKey("answer", Array.from(selectedIds).join(","));
-    
+
     // Logic: Enable "Next" if the section timer ran out OR the audio status is "FINISHED"
     // The user does NOT need to select an option anymore to enable the button.
     const canMoveToNext = isSectionExpired || status === "FINISHED";
-    
+
     setPhase(canMoveToNext ? "finished" : "prep");
   }, [selectedIds, isSectionExpired, status, setPhase, setAnswerKey]);
 
@@ -101,44 +111,59 @@ export default function AudioToMCQ({
             {subsection?.replace(/_/g, " ")}
           </h2>
         </div>
-        <SectionTimerDisplay formattedTime={formattedTime} isExpired={isSectionExpired} />
+        <SectionTimerDisplay
+          formattedTime={formattedTime}
+          isExpired={isSectionExpired}
+        />
       </div>
 
       {/* AUDIO PLAYER CARD */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-10 shadow-sm flex flex-col items-center justify-center min-h-[140px] md:min-h-[180px] space-y-4">
+        {text && <p>{text}</p>}
         {status === "LOADING" && (
           <div className="flex flex-col items-center space-y-3">
             <Loader2 className="h-8 w-8 text-sky-500 animate-spin" />
-            <p className="text-gray-400 font-bold text-xs uppercase">Buffering...</p>
+            <p className="text-gray-400 font-bold text-xs uppercase">
+              Buffering...
+            </p>
           </div>
         )}
 
         {status === "PREP" && (
-          <div className="w-full max-w-xs md:max-w-md text-center space-y-3">
-            <div className="flex justify-between text-[10px] md:text-xs font-black text-amber-600 uppercase">
-              <span>Starting in</span>
-              <span>{prepLeft}s</span>
+          <>
+            <div className="w-full max-w-xs md:max-w-md text-center space-y-3">
+              <div className="flex justify-between text-[10px] md:text-xs font-black text-amber-600 uppercase">
+                <span>Starting in</span>
+                <span>{prepLeft}s</span>
+              </div>
+              <Progress
+                value={(prepLeft / prepSeconds) * 100}
+                className="h-2 bg-amber-50"
+              />
             </div>
-            <Progress value={(prepLeft / prepSeconds) * 100} className="h-2 bg-amber-50" />
-          </div>
+          </>
         )}
 
         {status === "PLAYING" && (
-          <div className="w-full max-w-xs md:max-w-md space-y-3">
-            <div className="flex justify-between items-center text-sky-600 font-bold text-[10px] md:text-xs uppercase">
-              <span className="flex items-center gap-2">
-                <Volume2 className="h-4 w-4 animate-pulse" /> Audio Playing
-              </span>
-              <span>{Math.round(progress)}%</span>
+          <>
+            <div className="w-full max-w-xs md:max-w-md space-y-3">
+              <div className="flex justify-between items-center text-sky-600 font-bold text-[10px] md:text-xs uppercase">
+                <span className="flex items-center gap-2">
+                  <Volume2 className="h-4 w-4 animate-pulse" /> Audio Playing
+                </span>
+                <span>{Math.round(progress)}%</span>
+              </div>
+              <Progress value={progress} className="h-2 bg-sky-50" />
             </div>
-            <Progress value={progress} className="h-2 bg-sky-50" />
-          </div>
+          </>
         )}
 
         {status === "FINISHED" && (
           <div className="flex flex-col items-center space-y-2 text-green-600 animate-in fade-in zoom-in duration-300">
             <CheckCircle2 className="h-8 w-8 md:h-10 md:w-10" />
-            <p className="font-black uppercase text-[10px] md:text-xs tracking-widest">Playback Complete</p>
+            <p className="font-black uppercase text-[10px] md:text-xs tracking-widest">
+              Playback Complete
+            </p>
           </div>
         )}
 
@@ -162,18 +187,23 @@ export default function AudioToMCQ({
             Next button will unlock after audio ends
           </p>
         )}
-        
+
         {options.map((opt) => {
           const isChecked = selectedIds.has(opt.id);
-          const isSingle = ["highlight_correct_summary", "l_mc_single", "select_missing_word"].includes(type);
+          const isSingle = [
+            "highlight_correct_summary",
+            "l_mc_single",
+            "select_missing_word",
+          ].includes(type);
 
           return (
             <label
               key={opt.id}
               className={`group flex items-start gap-4 rounded-xl border-2 p-4 md:p-5 cursor-pointer transition-all
-                ${isChecked
-                  ? "border-sky-500 bg-sky-50"
-                  : "border-gray-100 bg-white hover:border-sky-100"
+                ${
+                  isChecked
+                    ? "border-sky-500 bg-sky-50"
+                    : "border-gray-100 bg-white hover:border-sky-100"
                 }`}
             >
               <div className="pt-0.5">
@@ -184,7 +214,9 @@ export default function AudioToMCQ({
                   className="h-5 w-5 text-sky-600"
                 />
               </div>
-              <p className={`text-sm md:text-base ${isChecked ? "text-sky-900 font-semibold" : "text-gray-700 font-medium"}`}>
+              <p
+                className={`text-sm md:text-base ${isChecked ? "text-sky-900 font-semibold" : "text-gray-700 font-medium"}`}
+              >
                 {opt.option_text}
               </p>
             </label>

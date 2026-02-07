@@ -158,6 +158,8 @@ export default function ExamShell({ mocktestList }) {
     ],
   );
 
+  console.log(currentQuestion, "data check");
+
   useEffect(() => {
     const storedSession = localStorage.getItem("exam_session_id");
     const storedName = localStorage.getItem("exam_user_name");
@@ -332,6 +334,8 @@ function renderQuestionComponent(q, onNext, remainingTime) {
   const id = q.id;
   const sub = q.subsection;
 
+  console.log(q, "checking questions");
+
   switch (sub) {
     // --- Speaking ---
     case "read_aloud":
@@ -469,6 +473,7 @@ function renderQuestionComponent(q, onNext, remainingTime) {
           audioSrc={q.audio}
           options={q.options}
           onNext={onNext}
+          text={q.text}
         />
       );
 

@@ -403,6 +403,7 @@ function renderQuestionComponent(QuestionId, q, onNext, remainingTime) {
           type={q.subsection}
           audioSrc={q.audio}
           options={q.options}
+          text={q.text}
           onNext={onNext}
         />
       );
