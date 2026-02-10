@@ -72,6 +72,12 @@ export default function WriteEssay({ promptText, questionId, subsection }) {
           value={localText}
           onChange={handleTextChange}
           placeholder="Write your response here..."
+
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
+          autoComplete="off"
+          
           disabled={isSectionExpired}
           rows={12}
           className="text-sm md:text-base leading-relaxed p-3 md:p-4 resize-none focus:ring-2 min-h-[300px] md:min-h-[400px] border-gray-300 transition-all focus:ring-sky-500"
@@ -90,9 +96,7 @@ export default function WriteEssay({ promptText, questionId, subsection }) {
         {/* Simplified Word Count Display */}
         <div className="px-4 py-2 rounded-full border border-slate-900 bg-slate-800 text-white w-full md:w-auto text-center font-medium shadow-sm">
           Word count:{" "}
-          <span className="font-bold text-base ml-1">
-            {currentCount}
-          </span>
+          <span className="font-bold text-base ml-1">{currentCount}</span>
           <span className="opacity-70 ml-1"></span>
         </div>
 
