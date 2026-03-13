@@ -24,6 +24,7 @@ export const useExamStore = create((set, get) => ({
   phase: "prep",
   isStopSignalSent: false, // <-- NEW STATE VARIABLE
   isTimeExpired: false,
+  isSectionTimerPaused: false,
 
   setStartExam: (value) => set({ startExam: value }),
   // Set any top-level key of `answer`
@@ -62,6 +63,7 @@ export const useExamStore = create((set, get) => ({
   setQuestionSection: (section) => set({ questionSection: section }),
   setQuestionTimer: (time) => set({ questionTimer: time }),
   setRemainingTime: (time) => set({ remainingTime: time }),
+  setSectionTimerPaused: (value) => set({ isSectionTimerPaused: value }),
   setUserName: (name) => set({ userName: name.trim() }),
   setPhase: (ph) => set({ phase: ph }),
   setMockTestId: (id) => set({ mockTestId: id }),

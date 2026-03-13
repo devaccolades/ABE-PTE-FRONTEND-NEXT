@@ -13,6 +13,7 @@ import {
 
 import { useSectionTimer } from "../hooks/useSectionTimer";
 import SectionTimerDisplay from "../ui/SectionTimerDisplay";
+import IndividualQuestionTimer from "../ui/IndividualQuestionTimer";
 
 export default function SummarizeTheText({
   audioUrl,
@@ -22,6 +23,9 @@ export default function SummarizeTheText({
 }) {
   const setPhase = useExamStore((s) => s.setPhase);
   const setAnswerKey = useExamStore((s) => s.setAnswerKey);
+  const setSectionTimerPaused = useExamStore(
+    (s) => s.setSectionTimerPaused,
+  );
 
   const [stage, setStage] = useState("PREP");
   const [prepLeft, setPrepLeft] = useState(prepSeconds);
@@ -30,6 +34,17 @@ export default function SummarizeTheText({
   const audioRef = useRef(null);
 
   const { formattedTime, isExpired: isSectionExpired } = useSectionTimer();
+
+  useEffect(() => {
+    if (subsection === "summarize_spoken_text") {
+      setSectionTimerPaused(true);
+    }
+    return () => {
+      if (subsection === "summarize_spoken_text") {
+        setSectionTimerPaused(false);
+      }
+    };
+  }, [subsection, setSectionTimerPaused]);
 
   const wordLimit = useMemo(() => {
     if (subsection === "summarize_spoken_text") return 70;
@@ -103,10 +118,22 @@ export default function SummarizeTheText({
             {subsection.replace(/_/g, " ")}
           </h2>
         </div>
-        <SectionTimerDisplay
-          formattedTime={formattedTime}
-          isExpired={isSectionExpired}
-        />
+        <div className="flex flex-col items-end gap-1">
+          <SectionTimerDisplay
+            formattedTime={formattedTime}
+            isExpired={isSectionExpired}
+          />
+          {subsection === "summarize_spoken_text" && (
+            <IndividualQuestionTimer
+              initialSeconds={600}
+              onExpired={() => {
+                if (!isSectionExpired) {
+                  setPhase("writing");
+                }
+              }}
+            />
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-5 md:p-8 shadow-sm flex flex-col items-center justify-center min-h-[160px] space-y-4">
