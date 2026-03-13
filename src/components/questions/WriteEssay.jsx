@@ -6,11 +6,13 @@ import { useExamStore } from "@/store";
 // Hooks & UI Components
 import { useSectionTimer } from "../hooks/useSectionTimer";
 import SectionTimerDisplay from "../ui/SectionTimerDisplay";
+import IndividualQuestionTimer from "../ui/IndividualQuestionTimer";
 
 export default function WriteEssay({ promptText, questionId, subsection }) {
   const setPhase = useExamStore((s) => s.setPhase);
   const phase = useExamStore((s) => s.phase);
   const setAnswerKey = useExamStore((s) => s.setAnswerKey);
+  const setSectionTimerPaused = useExamStore((s) => s.setSectionTimerPaused);
 
   const [localText, setLocalText] = useState("");
 
@@ -21,6 +23,17 @@ export default function WriteEssay({ promptText, questionId, subsection }) {
   }, [subsection]);
 
   const { formattedTime, isExpired: isSectionExpired } = useSectionTimer();
+
+  useEffect(() => {
+    if (subsection === "summarize_written_text") {
+      setSectionTimerPaused(true);
+    }
+    return () => {
+      if (subsection === "summarize_written_text") {
+        setSectionTimerPaused(false);
+      }
+    };
+  }, [subsection, setSectionTimerPaused]);
 
   useEffect(() => {
     setPhase("prep");
@@ -57,10 +70,25 @@ export default function WriteEssay({ promptText, questionId, subsection }) {
         <h2 className="text-lg md:text-xl font-bold text-gray-800 tracking-tight uppercase">
           {subsection?.replace(/_/g, " ")}
         </h2>
-        <SectionTimerDisplay
-          formattedTime={formattedTime}
-          isExpired={isSectionExpired}
-        />
+        <div className="flex flex-col items-end gap-1">
+          {subsection === "summarize_written_text" ? (
+            <IndividualQuestionTimer
+              initialSeconds={600}
+              onExpired={() => {
+                // When the individual timer expires, mark section as finished
+                // so the shell can handle advancing.
+                if (!isSectionExpired) {
+                  setPhase("finished");
+                }
+              }}
+            />
+          ) : (
+            <SectionTimerDisplay
+              formattedTime={formattedTime}
+              isExpired={isSectionExpired}
+            />
+          )}
+        </div>
       </div>
 
       <div className="rounded-lg border border-gray-200 p-4 md:p-5 bg-gray-50 text-gray-900 shadow-sm max-h-[200px] md:max-h-none overflow-y-auto">
@@ -72,12 +100,10 @@ export default function WriteEssay({ promptText, questionId, subsection }) {
           value={localText}
           onChange={handleTextChange}
           placeholder="Write your response here..."
-
           spellCheck={false}
           autoCorrect="off"
           autoCapitalize="off"
           autoComplete="off"
-          
           disabled={isSectionExpired}
           rows={12}
           className="text-sm md:text-base leading-relaxed p-3 md:p-4 resize-none focus:ring-2 min-h-[300px] md:min-h-[400px] border-gray-300 transition-all focus:ring-sky-500"

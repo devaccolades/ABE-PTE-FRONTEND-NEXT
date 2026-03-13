@@ -65,6 +65,51 @@ export default function ExamShell({ mocktestList }) {
   // 🔒 ADDITION: submission lock
   const isSubmittingRef = useRef(false);
 
+  const clearExamLocalStorage = useCallback(() => {
+    const keysToClear = [
+      "exam_session_id",
+      "exam_user_name",
+      "current_question",
+      "next_question",
+      "exam_remaining_time",
+      "exam_remaining_time_section",
+      "exam_heartbeat",
+      "startExam",
+      // keep section_time_left for old timer logic too
+      "section_time_left",
+    ];
+    keysToClear.forEach((k) => localStorage.removeItem(k));
+  }, []);
+
+  // Heartbeat: helps distinguish "refresh" vs "tab closed then revisit"
+  useEffect(() => {
+    const now = Date.now();
+    const lastBeat = parseInt(localStorage.getItem("exam_heartbeat") || "0", 10);
+
+    let navType = "unknown";
+    try {
+      const navEntry = performance.getEntriesByType("navigation")?.[0];
+      if (navEntry && typeof navEntry.type === "string") navType = navEntry.type;
+    } catch {
+      // ignore
+    }
+
+    const isStale = !lastBeat || now - lastBeat > 30_000;
+
+    // If this is a fresh navigation and prior heartbeat is stale,
+    // assume previous tab was closed and clear any stale exam state.
+    if (navType === "navigate" && isStale) {
+      clearExamLocalStorage();
+    }
+
+    localStorage.setItem("exam_heartbeat", String(Date.now()));
+    const id = setInterval(() => {
+      localStorage.setItem("exam_heartbeat", String(Date.now()));
+    }, 5_000);
+
+    return () => clearInterval(id);
+  }, [clearExamLocalStorage]);
+
   useEffect(() => {
     if (!userName) {
       const storedName = localStorage.getItem("exam_user_name");
@@ -132,9 +177,35 @@ export default function ExamShell({ mocktestList }) {
         localStorage.setItem("startExam", startExam);
 
         if (q.mocktest_section.section_name !== questionSection) {
+          const newSectionName = q.mocktest_section.section_name;
+          const newSectionTotal = q.mocktest_section.total_duration;
+
+          // If we have a persisted timer for THIS section, prefer it (refresh survival).
+          const persistedSection = localStorage.getItem(
+            "exam_remaining_time_section",
+          );
+          const persistedTimeRaw = localStorage.getItem("exam_remaining_time");
+          const persistedTime =
+            persistedTimeRaw !== null ? parseInt(persistedTimeRaw, 10) : NaN;
+
+          const shouldUsePersisted =
+            persistedSection === newSectionName &&
+            Number.isFinite(persistedTime) &&
+            persistedTime >= 0;
+
           setQuestionSection(q.mocktest_section.section_name);
-          setQuestionTimer(q.mocktest_section.total_duration);
-          setRemainingTime(q.mocktest_section.total_duration);
+          setQuestionTimer(newSectionTotal);
+
+          const nextRemaining = shouldUsePersisted
+            ? persistedTime
+            : newSectionTotal;
+
+          setRemainingTime(nextRemaining);
+
+          // Section reset: if this is a natural new section, persist the new total immediately.
+          // If it's a refresh in the same section, we keep the persisted value.
+          localStorage.setItem("exam_remaining_time", String(nextRemaining));
+          localStorage.setItem("exam_remaining_time_section", newSectionName);
         }
 
         setAnswerKey("session_id", sessionId);
@@ -165,8 +236,17 @@ export default function ExamShell({ mocktestList }) {
     const storedName = localStorage.getItem("exam_user_name");
     if (storedSession && !sessionId) setSessionId(storedSession);
     if (storedName) setDisplayName(storedName);
+
+    // Hydrate remaining time from persisted value (refresh survival)
+    const persistedTimeRaw = localStorage.getItem("exam_remaining_time");
+    const persistedTime =
+      persistedTimeRaw !== null ? parseInt(persistedTimeRaw, 10) : NaN;
+    if (Number.isFinite(persistedTime) && persistedTime >= 0) {
+      setRemainingTime(persistedTime);
+    }
+
     setRehydrated(true);
-  }, [sessionId, setSessionId]);
+  }, [sessionId, setSessionId, setRemainingTime]);
 
   useEffect(() => {
     if (!rehydrated || !sessionId) return;
@@ -175,6 +255,15 @@ export default function ExamShell({ mocktestList }) {
       resumeUrl || `${baseUrl}get-question/?session_id=${sessionId}`,
     );
   }, [rehydrated, sessionId, baseUrl, loadQuestion]);
+
+  // Persist remainingTime whenever it updates (separate from 10-min local timers)
+  useEffect(() => {
+    if (!Number.isFinite(remainingTime)) return;
+    localStorage.setItem("exam_remaining_time", String(remainingTime));
+    if (questionSection) {
+      localStorage.setItem("exam_remaining_time_section", String(questionSection));
+    }
+  }, [remainingTime, questionSection]);
 
   // --- Submission Logic ---
   const handleModalNext = async () => {

@@ -9,6 +9,7 @@ export function useSectionTimer(onTimeExpired) {
   const setGlobalRemainingTime = useExamStore((s) => s.setRemainingTime);
   const storeRemainingTime = useExamStore((s) => s.remainingTime);
   const setIsTimeExpired = useExamStore((s) => s.setIsTimeExpired);
+  const isSectionTimerPaused = useExamStore((s) => s.isSectionTimerPaused);
 
   // Determine starting point: priority is LocalStorage (for refreshes), then Store, then Default
   const getStartTime = () => {
@@ -37,6 +38,12 @@ export function useSectionTimer(onTimeExpired) {
 
   // --- 2. THE COUNTDOWN ENGINE ---
   useEffect(() => {
+    if (isSectionTimerPaused) {
+      return () => {
+        setGlobalRemainingTime(timeLeftRef.current);
+      };
+    }
+
     const intervalId = setInterval(() => {
       setTimeLeft((prev) => {
         const nextValue = prev - 1;
@@ -71,7 +78,7 @@ export function useSectionTimer(onTimeExpired) {
       // This is the "Real World" sync point when switching questions
       setGlobalRemainingTime(timeLeftRef.current);
     };
-  }, [setGlobalRemainingTime, setIsTimeExpired, onTimeExpired]);
+  }, [setGlobalRemainingTime, setIsTimeExpired, onTimeExpired, isSectionTimerPaused]);
 
   const formatTime = (seconds) => {
     const total = Math.max(0, seconds);
