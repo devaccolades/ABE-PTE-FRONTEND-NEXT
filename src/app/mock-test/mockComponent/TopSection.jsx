@@ -2,6 +2,15 @@
 import React, { useState } from "react";
 import { mocktestStore } from "../mocktestStore";
 
+// Primary responsibility: Provides the mock-test category picker UI (Speaking/Writing/Reading/Listening).
+// Architecture role: Writes category selection into the mock-test store and opens the sidebar to choose a question.
+
+/**
+ * @description Top navigation/selector for mock-test categories.
+ * Expands/collapses and allows the user to choose a category which triggers sidebar question listing.
+ *
+ * @returns {JSX.Element} Top section UI for category selection.
+ */
 const TopSection = () => {
   const [active, setActive] = useState(false);
   const setCurrentQuestion = mocktestStore((state) => state.setCurrentQuestion);
@@ -45,6 +54,12 @@ const TopSection = () => {
     { id: "write_from_dictation", title: "Write from Dictation" },
   ];
 
+  /**
+   * @description Handles category selection by updating the store and opening the sidebar.
+   * @param {string} id - Backend category/subsection id (e.g., "read_aloud").
+   * @param {string} title - Human-friendly category title shown to the user.
+   * @returns {void}
+   */
   const handleClick = (id, title) => {
     setCurrentQuestion(id);
     setIsSideOpen(true);

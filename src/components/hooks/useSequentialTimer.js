@@ -2,6 +2,13 @@
 
 import { useState, useEffect, useRef } from 'react';
 
+// Primary responsibility: Provides a multi-stage countdown state machine (prep -> optional middle -> recording) for timed tasks.
+// Architecture role: Shared timing primitive used by question components with an intermediate activity phase (e.g., media playback).
+
+/**
+ * @description Phases used by `useSequentialTimer` for multi-step task lifecycles.
+ * @type {{ PREP: "prep", ACTIVE_MIDDLE: "active_middle", RECORDING: "recording", FINISHED: "finished", ERROR: "error" }}
+ */
 export const PHASES = {
   PREP: 'prep',
   ACTIVE_MIDDLE: 'active_middle',
@@ -10,6 +17,32 @@ export const PHASES = {
   ERROR: 'error',
 };
 
+/**
+ * @description Hook that manages a sequential, multi-phase timer using an absolute end timestamp.
+ *
+ * Why this uses an absolute end timestamp + ref guard:
+ * - Anchoring to `Date.now()` reduces drift when the browser throttles intervals or React re-renders frequently.
+ * - `hasTriggeredEndRef` ensures each phase-end callback fires once, even if the interval ticks multiple times at expiry.
+ *
+ * @param {number} prepDuration - Preparation duration in seconds.
+ * @param {number} middleDuration - Middle/active duration in seconds (0 when not used).
+ * @param {number} recDuration - Recording duration in seconds.
+ * @param {any} triggerReset - Value used to reset the timer when the question changes.
+ * @param {(hasMiddle: boolean) => void} onPrepEnd - Called when prep ends; receives whether a middle phase exists.
+ * @param {() => void} onMiddleEnd - Called when middle phase ends.
+ * @param {() => void} onRecordEnd - Called when recording ends.
+ * @returns {{
+ *   phase: string,
+ *   setPhase: (newPhase: string) => void,
+ *   timeLeft: number,
+ *   prepLeft: number,
+ *   middleLeft: number,
+ *   recLeft: number,
+ *   prepProgress: number,
+ *   middleProgress: number,
+ *   recProgress: number
+ * }} Current phase/timing state and progress values for UI components.
+ */
 export function useSequentialTimer(
   prepDuration,
   middleDuration,

@@ -5,9 +5,23 @@ import { useState, useEffect, useRef } from 'react';
 // ... (Use the PHASES constants from useSequentialTimer) ...
 
 /**
- * Hook to manage media element state and time tracking.
- * @param {string} mediaSrc - The URL of the media.
- * @param {function} onEndedOrBlocked - Callback when media ends or is blocked/errors.
+ * @description Hook that manages a media element ref (audio/video), playback progress, and failure handling.
+ *
+ * Why this exists:
+ * - Some tasks rely on playing prompt audio/video before moving to a recording phase.
+ * - Browsers may block autoplay; this hook centralizes the fallback behavior via `onEndedOrBlocked`.
+ *
+ * @param {string} mediaSrc - URL for the media (audio/video) to play.
+ * @param {(blockedOrFailed: boolean) => void} onEndedOrBlocked - Callback when media ends (false) or playback is blocked/errors (true).
+ * @param {(phase: any) => void} setPhase - Phase setter used by the parent timer/state machine (exact type depends on caller).
+ * @returns {{
+ *   mediaRef: import("react").RefObject<HTMLMediaElement|null>,
+ *   mediaProgress: number,
+ *   mediaTime: { current: number, total: number },
+ *   startMediaPlayback: (onSuccessPhase: any) => Promise<void>,
+ *   pauseMedia: () => void,
+ *   formatTime: (s?: number) => string
+ * }} Media ref, progress state, and playback helpers.
  */
 export function useMediaPlayback(mediaSrc, onEndedOrBlocked, setPhase) {
     const mediaRef = useRef(null);
@@ -49,6 +63,13 @@ export function useMediaPlayback(mediaSrc, onEndedOrBlocked, setPhase) {
     
     // --- Actions ---
 
+    /**
+     * @description Attempts to start playback from the beginning. On success, moves the caller into `onSuccessPhase`.
+     * If autoplay is blocked or media is missing, invokes the fallback callback with `true`.
+     *
+     * @param {any} onSuccessPhase - Phase to set when playback begins successfully (type depends on caller).
+     * @returns {Promise<void>}
+     */
     const startMediaPlayback = async (onSuccessPhase) => {
         const media = mediaRef.current;
         
@@ -75,6 +96,10 @@ export function useMediaPlayback(mediaSrc, onEndedOrBlocked, setPhase) {
         }
     };
 
+    /**
+     * @description Pauses playback if the media element is currently playing.
+     * @returns {void}
+     */
     const pauseMedia = () => {
         const media = mediaRef.current;
         if (media && !media.paused) {
@@ -82,6 +107,11 @@ export function useMediaPlayback(mediaSrc, onEndedOrBlocked, setPhase) {
         }
     };
     
+    /**
+     * @description Formats a time (seconds) as mm:ss for UI display.
+     * @param {number} [s=0] - Seconds to format.
+     * @returns {string} Time string in mm:ss.
+     */
     const formatTime = (s = 0) => {
         const m = Math.floor(s / 60);
         const sec = Math.floor(s % 60);

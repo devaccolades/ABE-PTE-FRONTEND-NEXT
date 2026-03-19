@@ -2,6 +2,23 @@ import { useState, useEffect, useRef } from "react";
 import { useExamStore } from "@/store";
 import { mocktestStore } from "@/app/mock-test/mocktestStore";
 
+// Primary responsibility: Provides a section-level countdown timer with persistence and exam lifecycle integration.
+// Architecture role: Central timer used across the exam flow to manage section expiry and trigger auto-advance behavior.
+
+/**
+ * @description Hook that manages the section countdown and persists it for refresh survival.
+ *
+ * Persistence strategy:
+ * - Uses `localStorage.section_time_left` as the primary refresh-safe source.
+ * - Syncs to `useExamStore.remainingTime` on significant changes and on unmount.
+ *
+ * Why refs are used:
+ * - `timeLeftRef` holds the latest value inside the interval without re-subscribing the interval each tick.
+ * - This prevents stale closures and keeps cleanup synchronization accurate.
+ *
+ * @param {(() => void)|undefined} onTimeExpired - Optional callback fired when the timer reaches zero.
+ * @returns {{ timeLeft: number, formattedTime: string, isExpired: boolean }} Countdown state for UI rendering.
+ */
 export function useSectionTimer(onTimeExpired) {
   const isMockTest = mocktestStore((state) => state.isMockTest);
 
@@ -12,6 +29,10 @@ export function useSectionTimer(onTimeExpired) {
   const isSectionTimerPaused = useExamStore((s) => s.isSectionTimerPaused);
 
   // Determine starting point: priority is LocalStorage (for refreshes), then Store, then Default
+  /**
+   * @description Determines the initial timer start value (seconds) with refresh survival.
+   * @returns {number} Initial section time in seconds.
+   */
   const getStartTime = () => {
     const saved = localStorage.getItem("section_time_left");
     // console.log("local host time ", saved);
@@ -39,11 +60,14 @@ export function useSectionTimer(onTimeExpired) {
   // --- 2. THE COUNTDOWN ENGINE ---
   useEffect(() => {
     if (isSectionTimerPaused) {
+      // Why this exists: pausing the section timer should not lose progress.
+      // We persist the current ref value back to the global store during pause cleanup.
       return () => {
         setGlobalRemainingTime(timeLeftRef.current);
       };
     }
 
+    // Interval-driven countdown; stores the latest value in both local state and persistence layers.
     const intervalId = setInterval(() => {
       setTimeLeft((prev) => {
         const nextValue = prev - 1;
