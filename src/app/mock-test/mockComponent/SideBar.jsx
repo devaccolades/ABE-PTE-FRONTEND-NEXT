@@ -3,6 +3,15 @@
 import React, { useEffect, useState } from "react";
 import { mocktestStore } from "../mocktestStore";
 
+// Primary responsibility: Displays the question list sidebar for the selected mock-test category.
+// Architecture role: Fetches category questions and lets the user pick a concrete question to practice.
+
+/**
+ * @description Sidebar overlay that lists questions for the currently selected category.
+ * The sidebar fetches the list whenever `currentQuestion` (category id) changes.
+ *
+ * @returns {JSX.Element} Sidebar overlay UI.
+ */
 const SideBar = () => {
   const isSideOpen = mocktestStore((state) => state.isSideOpen);
   const setIsSideOpen = mocktestStore((state) => state.setIsSideOpen);
@@ -20,6 +29,8 @@ const SideBar = () => {
 
   useEffect(() => {
     if (currentQuestion) {
+      // Why this exists: the list of questions depends on the selected category.
+      // Fetching inside the effect ensures the sidebar stays in sync with category selection.
       const fetchQuestionData = async () => {
         try {
           setLoading(true);
@@ -40,6 +51,11 @@ const SideBar = () => {
     }
   }, [currentQuestion, baseUrl]);
 
+  /**
+   * @description Handles selecting a question and closing the sidebar.
+   * @param {any} item - Backend question payload selected from the list.
+   * @returns {void}
+   */
   const handleClick = (item) => {
     setSelectedQuestion(item);
     setIsSideOpen(false);
@@ -80,6 +96,10 @@ const SideBar = () => {
   );
 };
 
+/**
+ * @description Minimal skeleton UI rendered while the sidebar question list is loading.
+ * @returns {JSX.Element} Loading placeholder rows.
+ */
 const QuestionSkeleton = () => {
   return (
     <div className="flex flex-col space-y-3">

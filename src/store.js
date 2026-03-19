@@ -1,5 +1,50 @@
 import { create } from "zustand";
 
+// Primary responsibility: Defines the global exam store (Zustand) and shared client-side API stubs.
+// Architecture role: Single source of truth for exam lifecycle state used across pages/components.
+
+/**
+ * @typedef {Object} ExamAnswerState
+ * @property {string} session_id - Backend session identifier associated with the current exam run.
+ * @property {string} question_name - Stable identifier/name for the currently active question.
+ * @property {Object} answer - Structured answer payload for the current question (e.g., selected options, typed blanks).
+ * @property {Blob|null|string} answer_audio - Optional audio payload for speaking tasks (stored as a Blob while recording).
+ */
+
+/**
+ * @typedef {"prep"|"recording"|"typing"|"review"|"submitted"} ExamPhase
+ * @description Logical phase of the current question UI within the exam lifecycle.
+ *
+ * Notes:
+ * - The app commonly uses `phase === "prep"` to mean "candidate is not allowed to proceed yet".
+ * - Recording/typing phases are used by question components to coordinate timers, UI locks, and stop events.
+ */
+
+/**
+ * @typedef {Object} ExamStoreState
+ * @property {string} userName - Candidate name used for personalization and submission association.
+ * @property {number|null} mockTestId - Selected mock test identifier (when applicable).
+ * @property {string} currentStep - High-level exam navigation step (currently linear; reserved for future multi-step flows).
+ * @property {number} questionIndex - Index pointer used by earlier/alternate navigation flows.
+ * @property {string|null} nextQuestion - URL to the next question endpoint returned by backend pagination.
+ * @property {string} sessionId - Backend session identifier for the current exam attempt.
+ * @property {string} questionSection - Human-readable/current section name (e.g., Speaking/Reading) used for section timers.
+ * @property {number} questionTimer - Total duration for the current section (seconds), used to initialize section countdown.
+ * @property {boolean} stopSignal - Global "stop now" flag for question components (e.g., stop recording / stop timers).
+ * @property {number} remainingTime - Persisted section time remaining (seconds); survives refresh via localStorage.
+ * @property {boolean} startExam - Controls whether the user has started the exam flow (gate before questions).
+ * @property {string} baseUrl - Base backend URL for exam endpoints.
+ * @property {ExamAnswerState} answer - Current question answer payload (text selections and/or audio).
+ * @property {ExamPhase} phase - Current question UI phase (prep/recording/etc.) used to gate actions like "Next".
+ * @property {boolean} isStopSignalSent - Tracks whether a stop signal has already been issued (prevents duplicates in some flows).
+ * @property {boolean} isTimeExpired - Section timer expiry flag that triggers auto-advance/section jump logic.
+ * @property {boolean} isSectionTimerPaused - Pauses section countdown when the UI needs to temporarily stop decrementing time.
+ */
+
+/**
+ * @description Global Zustand store for the exam runtime state.
+ * @returns {(selector?: Function) => any} Zustand hook with state and action setters.
+ */
 export const useExamStore = create((set, get) => ({
   userName: "",
   mockTestId: null,
@@ -9,28 +54,50 @@ export const useExamStore = create((set, get) => ({
   sessionId: "",
   questionSection: "",
   questionTimer: 0,
+  // When true, question components should stop ongoing activity immediately (e.g., stop recording, stop listening playback).
   stopSignal: false,
+  // Section-level remaining time (persisted). This is used to resume the exam section timer after refresh.
   remainingTime: 0,
   startExam: false,
   baseUrl: "https://admin.pte.abeedu.com/mocktest/",
   // baseUrl: "https://admin.abepte.accoladesweb.com/mocktest/",
   // baseUrl: "http://192.168.29.96:8000/mocktest/",
+  // Current answer payload for the active question only (resets on question transitions).
   answer: {
     session_id: "",
     question_name: "",
     answer: {},
     answer_audio: null,
   },
+  // "phase" describes where the candidate is within the current question interaction (prep/record/typing/etc.).
   phase: "prep",
   isStopSignalSent: false, // <-- NEW STATE VARIABLE
+  // Section time expiry used to auto-submit/auto-advance when a section timer runs out.
   isTimeExpired: false,
+  // Used to temporarily freeze section time decrementing (e.g., while waiting for transitions).
   isSectionTimerPaused: false,
 
+  /**
+   * @description Toggles the global "exam started" flag used to gate rendering of the exam UI.
+   * @param {boolean} value - Whether the exam has been started by the candidate.
+   * @returns {void}
+   */
   setStartExam: (value) => set({ startExam: value }),
   // Set any top-level key of `answer`
+  /**
+   * @description Sets the global stop signal flag to instruct question components to stop active work.
+   * @param {boolean} value - True to request stop; false to clear the signal after handling.
+   * @returns {void}
+   */
   setStopSignal: (value) => set({ stopSignal: value }),
   // Inside your create() function
   // Replace the old setAnswerKey with these two
+  /**
+   * @description Updates a top-level property of the `answer` object (e.g., session_id, question_name, answer_audio).
+   * @param {keyof ExamAnswerState} key - Top-level `answer` key to update.
+   * @param {any} value - Value to store for the given key.
+   * @returns {void}
+   */
   setAnswerKey: (key, value) =>
     set((state) => ({
       answer: {
@@ -39,6 +106,12 @@ export const useExamStore = create((set, get) => ({
       },
     })),
 
+  /**
+   * @description Updates a nested entry inside `answer.answer` for multi-input questions (e.g., blanks, MCQs).
+   * @param {string} id - Per-input identifier (blank id / option group id).
+   * @param {any} value - Value for the given nested input.
+   * @returns {void}
+   */
   setNestedAnswer: (id, value) =>
     set((state) => ({
       answer: {
@@ -51,6 +124,10 @@ export const useExamStore = create((set, get) => ({
     })),
 
   // Reset all fields (if needed)
+  /**
+   * @description Resets the `answer` object to its initial (empty) state for the next question.
+   * @returns {void}
+   */
   resetAnswer: () =>
     set(() => ({
       answer: {
@@ -60,23 +137,89 @@ export const useExamStore = create((set, get) => ({
         answer_audio: "",
       },
     })),
+  /**
+   * @description Sets the current section name (used for displaying and persisting section-level timer state).
+   * @param {string} section - Section name returned by backend (e.g., "Speaking").
+   * @returns {void}
+   */
   setQuestionSection: (section) => set({ questionSection: section }),
+  /**
+   * @description Sets the total timer duration (seconds) for the current section.
+   * @param {number} time - Section total duration in seconds.
+   * @returns {void}
+   */
   setQuestionTimer: (time) => set({ questionTimer: time }),
+  /**
+   * @description Updates the remaining time (seconds) for the current section (persisted separately by UI logic).
+   * @param {number} time - Remaining seconds.
+   * @returns {void}
+   */
   setRemainingTime: (time) => set({ remainingTime: time }),
+  /**
+   * @description Pauses or resumes the section timer decrement logic.
+   * @param {boolean} value - True to pause; false to resume.
+   * @returns {void}
+   */
   setSectionTimerPaused: (value) => set({ isSectionTimerPaused: value }),
+  /**
+   * @description Stores the candidate name after trimming whitespace.
+   * @param {string} name - Candidate-provided display name.
+   * @returns {void}
+   */
   setUserName: (name) => set({ userName: name.trim() }),
+  /**
+   * @description Updates the current question lifecycle phase (prep/recording/etc.).
+   * @param {ExamPhase} ph - Next phase value.
+   * @returns {void}
+   */
   setPhase: (ph) => set({ phase: ph }),
+  /**
+   * @description Stores the selected mock test id for the current run.
+   * @param {number|string|null} id - Mock test identifier.
+   * @returns {void}
+   */
   setMockTestId: (id) => set({ mockTestId: id }),
+  /**
+   * @description Appends an answer to the historical answers array (used by some flows).
+   * @param {any} answer - Answer payload to append.
+   * @returns {void}
+   */
   addAnswer: (answer) => set({ answers: [...get().answers, answer] }),
+  /**
+   * @description Stores the backend-provided URL for the next question (used for pagination-based navigation).
+   * @param {string|null} question - "next" URL from API pagination or null when the exam is complete.
+   * @returns {void}
+   */
   setNextQuestion: (question) => set({ nextQuestion: question }),
   // nextQuestion: () => set({ questionIndex: get().questionIndex + 1 }),
+  /**
+   * @description Sets the backend session id for this exam attempt.
+   * @param {string} id - Session identifier.
+   * @returns {void}
+   */
   setSessionId: (id) => set({ sessionId: id }),
+  /**
+   * @description Updates the "section time expired" flag used to trigger auto-submit/auto-advance.
+   * @param {boolean} time - True when expired; false to clear after handling.
+   * @returns {void}
+   */
   setIsTimeExpired: (time) => set({ isTimeExpired: time }),
+  /**
+   * @description Resets the high-level exam navigation state for a fresh run.
+   * @returns {void}
+   */
   resetExam: () => set({ currentStep: "exam", questionIndex: 0, answers: [] }),
 }));
 
-// Simple client-side stubs for later API integration
+/**
+ * @description Simple client-side API stubs for later backend integration.
+ * @returns {{fetchExam: () => Promise<any>, submitAnswer: (payload: any) => Promise<{ok: boolean}>}} API facade.
+ */
 export const apiClient = {
+  /**
+   * @description Fetches a mock exam definition; currently returns a placeholder structure for local/demo usage.
+   * @returns {Promise<any>} Placeholder exam configuration including sections/questions.
+   */
   async fetchExam() {
     // placeholder structure for demo
     return {
@@ -568,6 +711,11 @@ export const apiClient = {
       ],
     };
   },
+  /**
+   * @description Submits an answer payload; currently a no-op stub to be wired to backend later.
+   * @param {any} _payload - Answer submission payload (unused in stub).
+   * @returns {Promise<{ok: boolean}>} Minimal success response for callers.
+   */
   async submitAnswer(_payload) {
     // noop: wire to backend later
     return { ok: true };

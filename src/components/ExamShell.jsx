@@ -2,6 +2,9 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useExamStore } from "@/store";
 
+// Primary responsibility: Orchestrates the exam runtime (fetch current question, persist/rehydrate session, submit answers).
+// Architecture role: Coordinates global store state with per-question components and backend pagination/navigation.
+
 // Components
 import ReadAloud from "@/components/questions/ReadAloud";
 import WriteEssay from "@/components/questions/WriteEssay";
@@ -29,11 +32,29 @@ import ExamCompleteScreen from "./ui/ExamCompleteScreen";
 import PTEReadinessCheck from "./questions/PTEReadinessCheck";
 import PreExam from "./questions/PreExam";
 
+/**
+ * @description Top-level exam container responsible for loading questions, persisting exam session state,
+ * coordinating timers, and submitting answers before routing to the next question.
+ *
+ * Exam lifecycle (high level):
+ * - Session rehydrates from localStorage (`sessionId`, current/next question URLs, remaining section time).
+ * - A "heartbeat" distinguishes hard closes vs refresh to avoid stale local exam state.
+ * - `loadQuestion()` fetches the current question, updates global state, and initializes section timers.
+ * - `handleModalNext()` submits the current answer and then navigates using `nextQuestionUrl` pagination.
+ *
+ * @param {Object} props - Component props.
+ * @param {any[]} props.mocktestList - Mock test list passed down for name-gating / selection flows.
+ * @returns {JSX.Element} Rendered exam experience or gating/completion screens.
+ */
 export default function ExamShell({ mocktestList }) {
   const {
     sessionId,
     setSessionId,
     baseUrl,
+    // Global lifecycle controls from the exam store:
+    // - `phase`: current question interaction phase (prep/recording/typing/etc.) that gates actions like "Next".
+    // - `stopSignal`: broadcast flag used to tell active question components to stop (finalize recording/timers) before submit.
+    // - `nextQuestion`: backend pagination "next" URL that drives question-to-question navigation.
     phase,
     setPhase,
     setAnswerKey,
@@ -62,9 +83,13 @@ export default function ExamShell({ mocktestList }) {
 
   const { startExam, setStartExam } = useExamStore();
 
-  // 🔒 ADDITION: submission lock
+  // Submission lock: prevents duplicate submissions caused by double-clicks, fast re-renders, or timer-triggered auto-submit.
   const isSubmittingRef = useRef(false);
 
+  /**
+   * @description Clears all exam-related localStorage keys used for refresh survival and session resume.
+   * @returns {void}
+   */
   const clearExamLocalStorage = useCallback(() => {
     const keysToClear = [
       "exam_session_id",
@@ -96,6 +121,9 @@ export default function ExamShell({ mocktestList }) {
 
     const isStale = !lastBeat || now - lastBeat > 30_000;
 
+    // Why this exists: localStorage persists across browser restarts and tab closes.
+    // If we detect a "navigate" into the app after the heartbeat is stale, we assume prior exam state is not reliable
+    // and proactively clear it to prevent resuming an outdated session.
     // If this is a fresh navigation and prior heartbeat is stale,
     // assume previous tab was closed and clear any stale exam state.
     if (navType === "navigate" && isStale) {
@@ -103,6 +131,7 @@ export default function ExamShell({ mocktestList }) {
     }
 
     localStorage.setItem("exam_heartbeat", String(Date.now()));
+    // Keep the heartbeat fresh while this tab is alive so a normal refresh does not get treated as a stale revisit.
     const id = setInterval(() => {
       localStorage.setItem("exam_heartbeat", String(Date.now()));
     }, 5_000);
@@ -111,12 +140,19 @@ export default function ExamShell({ mocktestList }) {
   }, [clearExamLocalStorage]);
 
   useEffect(() => {
+    // Refresh survival: restore the candidate name if the store was reset but localStorage still has it.
     if (!userName) {
       const storedName = localStorage.getItem("exam_user_name");
       if (storedName) setUserName(storedName);
     }
   }, [userName, setUserName]);
 
+  /**
+   * @description Fetches the next question when a section timer expires and backend requires a "timer-exceeded" jump.
+   * This function polls until the backend provides a `next` URL.
+   *
+   * @returns {Promise<string|null>} Next question URL or null if the request fails.
+   */
   const sectionJump = async () => {
     const response = await fetch(
       `${baseUrl}question/?session_id=${sessionId}`,
@@ -130,6 +166,8 @@ export default function ExamShell({ mocktestList }) {
 
     const data = await response.json();
 
+    // Backend may need time to calculate the next question after a forced section jump.
+    // We poll briefly to avoid advancing to a null/undefined URL.
     if (!data.next) {
       await new Promise((r) => setTimeout(r, 500));
       return sectionJump();
@@ -140,12 +178,20 @@ export default function ExamShell({ mocktestList }) {
   };
 
   useEffect(() => {
+    // Persisted exam-start gate: allows refresh without returning the candidate to the pre-exam screen.
     const savedStatus = localStorage.getItem("startExam");
     if (savedStatus === "true") {
       setStartExam(true);
     }
   }, [setStartExam]);
 
+  /**
+   * @description Loads a question from the backend and initializes store state for the new question.
+   * Also persists resume URLs and section timer state for refresh survival.
+   *
+   * @param {string|null|undefined} targetUrl - Fully-qualified URL for the question endpoint to fetch.
+   * @returns {Promise<void>}
+   */
   const loadQuestion = useCallback(
     async (targetUrl) => {
       if (!targetUrl) {
@@ -164,6 +210,7 @@ export default function ExamShell({ mocktestList }) {
           return;
         }
 
+        // Reset per-question global flags before handing off to the next question component.
         setStopSignal(false);
         setPhase("prep");
         resetAnswer();
@@ -172,6 +219,7 @@ export default function ExamShell({ mocktestList }) {
         setQuestionSection(q.mocktest_section.section_name);
         setNextQuestion(data.next);
 
+        // Persist resume pointers so the candidate can refresh without losing their place.
         localStorage.setItem("current_question", targetUrl);
         localStorage.setItem("next_question", data.next);
         localStorage.setItem("startExam", startExam);
@@ -208,6 +256,7 @@ export default function ExamShell({ mocktestList }) {
           localStorage.setItem("exam_remaining_time_section", newSectionName);
         }
 
+        // Ensure the outgoing answer payload contains stable metadata needed by the backend for submission.
         setAnswerKey("session_id", sessionId);
         setAnswerKey("question_name", q.name);
         setPhase("prep");
@@ -232,6 +281,7 @@ export default function ExamShell({ mocktestList }) {
   console.log(currentQuestion, "data check");
 
   useEffect(() => {
+    // Rehydration: restore the session id and display name from localStorage for refresh survival.
     const storedSession = localStorage.getItem("exam_session_id");
     const storedName = localStorage.getItem("exam_user_name");
     if (storedSession && !sessionId) setSessionId(storedSession);
@@ -249,6 +299,7 @@ export default function ExamShell({ mocktestList }) {
   }, [sessionId, setSessionId, setRemainingTime]);
 
   useEffect(() => {
+    // Only attempt to load questions after store state has been rehydrated and we have a session id available.
     if (!rehydrated || !sessionId) return;
     const resumeUrl = localStorage.getItem("current_question");
     loadQuestion(
@@ -258,6 +309,7 @@ export default function ExamShell({ mocktestList }) {
 
   // Persist remainingTime whenever it updates (separate from 10-min local timers)
   useEffect(() => {
+    // Why this exists: section timers may run in components; persisting here centralizes refresh survival.
     if (!Number.isFinite(remainingTime)) return;
     localStorage.setItem("exam_remaining_time", String(remainingTime));
     if (questionSection) {
@@ -266,8 +318,14 @@ export default function ExamShell({ mocktestList }) {
   }, [remainingTime, questionSection]);
 
   // --- Submission Logic ---
+  /**
+   * @description Submits the current answer, advances to the next question, and handles forced section-jump flows.
+   * This is invoked both by the "Next" confirmation modal and by timer-expiry auto-advance.
+   *
+   * @returns {Promise<void>}
+   */
   const handleModalNext = async () => {
-    // 🔒 ADDITION: guard
+    // Guard: do not allow concurrent submissions (manual click + timer expiry or double clicks).
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
 
@@ -276,6 +334,7 @@ export default function ExamShell({ mocktestList }) {
     const currentPhase = useExamStore.getState().phase;
 
     if (currentPhase === "recording" || currentPhase === "prep") {
+      // When leaving a recording/prep phase, broadcast a stop signal so the active question component can finalize.
       setStopSignal(true);
       setLoading(true);
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -311,6 +370,7 @@ export default function ExamShell({ mocktestList }) {
       resetAnswer();
 
       if (isTimeExpired) {
+        // Timer expiry path: backend may require a special jump to the correct next question for the next section.
         const jumpedNextUrl = await sectionJump();
 
         if (jumpedNextUrl) {
@@ -320,7 +380,7 @@ export default function ExamShell({ mocktestList }) {
           setCurrentQuestion(null);
         }
 
-        // ✅ RESET HERE (IMPORTANT)
+        // Reset the expiry flag after handling so we don't repeatedly auto-advance on subsequent renders.
         useExamStore.getState().setIsTimeExpired(false);
 
         return;
@@ -337,12 +397,13 @@ export default function ExamShell({ mocktestList }) {
       setLoading(false);
       setStopSignal(false);
     } finally {
-      // 🔓 ADDITION: release lock
+      // Release submission lock after success/failure to allow the candidate to retry or proceed.
       isSubmittingRef.current = false;
     }
   };
 
   useEffect(() => {
+    // Auto-advance when the section timer expires. Using a timeout avoids calling submission logic during render.
     if (!isTimeExpired) return;
 
     const id = setTimeout(() => {
@@ -417,7 +478,11 @@ export default function ExamShell({ mocktestList }) {
 }
 
 /**
- * Consolidated Router using ONLY q.subsection
+ * @description Consolidated router that selects the appropriate question component using `q.subsection`.
+ * @param {any} q - Current question payload from backend.
+ * @param {Function} onNext - Callback to submit and advance to the next question.
+ * @param {number} remainingTime - Current remaining section time (seconds) for timed writing/listening tasks.
+ * @returns {JSX.Element} The rendered question component for the given payload.
  */
 function renderQuestionComponent(q, onNext, remainingTime) {
   const id = q.id;
@@ -618,6 +683,11 @@ function renderQuestionComponent(q, onNext, remainingTime) {
   }
 }
 
+/**
+ * @description Maps backend subsection codes to display titles for the UI header.
+ * @param {string} sub - Backend subsection identifier (e.g., "read_aloud", "mc_single").
+ * @returns {string} Human-friendly title string for the current question type.
+ */
 function titleFor(sub) {
   const map = {
     read_aloud: "Speaking: Read Aloud",
@@ -650,6 +720,10 @@ function titleFor(sub) {
   return map[sub] || "Mock Test Question";
 }
 
+/**
+ * @description Lightweight skeleton UI displayed while the first question is loading.
+ * @returns {JSX.Element} Loading placeholder UI.
+ */
 function ExamLoadingSkeleton() {
   return (
     <div className="w-full max-w-4xl mx-auto p-10 bg-white rounded-xl animate-pulse shadow-sm border border-gray-100">

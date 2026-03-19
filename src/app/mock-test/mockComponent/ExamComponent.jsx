@@ -22,6 +22,20 @@ import NotificationMessage from "@/components/sections/NotificationMessage";
 import CategoryMessage from "@/components/sections/CategoryMessage";
 import toast, { Toaster } from "react-hot-toast";
 
+// Primary responsibility: Renders and submits a single mock-test question (practice mode).
+// Architecture role: Bridges mock-test selection state (mocktestStore) with shared exam answer mechanics (useExamStore).
+
+/**
+ * @description Mock-test question runner. Displays the selected question and submits a single response
+ * (including optional audio) to the mock-test submission endpoint.
+ *
+ * Key behaviors:
+ * - Uses `mocktestStore` for selection (category/question) and backend base URL.
+ * - Uses `useExamStore` for shared answer capture and `phase`/`stopSignal` coordination with question components.
+ * - Uses a brief stop-signal buffer before submission to allow recording components to finalize the audio Blob.
+ *
+ * @returns {JSX.Element} Mock-test question UI including the confirmation modal.
+ */
 const ExamComponent = () => {
   const selectedQuestion = mocktestStore((state) => state.selectedQuestion);
   const currentQuestion = mocktestStore((state) => state.currentQuestion);
@@ -34,6 +48,10 @@ const ExamComponent = () => {
   const setStopSignal = useExamStore((state) => state.setStopSignal);
   const resetAnswer = useExamStore((state) => state.resetAnswer);
 
+  /**
+   * @description Stores the candidate name used for single-question mock-test submissions.
+   * @returns {void}
+   */
   const handleSubmit = () => {
     setName(inputValue);
     console.log(inputValue);
@@ -47,6 +65,16 @@ const ExamComponent = () => {
     }
   }, [selectedQuestion]);
 
+  /**
+   * @description Submits the current mock-test answer to the backend.
+   *
+   * Why the stop-signal + delay exists:
+   * - Speaking tasks record audio in child components.
+   * - When the user clicks "Next" while recording/prep is still active, we must signal the child to stop and finalize.
+   * - The short delay provides a buffer for the audio Blob to be produced and stored in `useExamStore`.
+   *
+   * @returns {Promise<void>}
+   */
   const handleModalNext = async () => {
     setCallAreYouSure(false);
     // 1. Check if the question is currently in a recording/active state
@@ -231,6 +259,11 @@ const ExamComponent = () => {
   );
 };
 
+/**
+ * @description Maps backend subsection codes to display titles for the mock-test header.
+ * @param {string} sub - Backend subsection identifier (e.g., "read_aloud", "mc_single").
+ * @returns {string} Human-friendly title string for the current question type.
+ */
 function titleFor(sub) {
   const map = {
     read_aloud: "Speaking: Read Aloud",
@@ -263,6 +296,14 @@ function titleFor(sub) {
   return map[sub] || "Mock Test Question";
 }
 
+/**
+ * @description Renders the appropriate question component for mock-test mode based on the selected category.
+ * @param {string} QuestionId - Selected category/subsection identifier.
+ * @param {any} q - Concrete question payload selected from the sidebar.
+ * @param {Function} onNext - Callback to submit and advance (passed through to question components when used).
+ * @param {number} remainingTime - Remaining time (seconds) for timed writing/listening tasks (if applicable).
+ * @returns {JSX.Element} Rendered question component.
+ */
 function renderQuestionComponent(QuestionId, q, onNext, remainingTime) {
   const id = q.id;
   const sub = QuestionId;

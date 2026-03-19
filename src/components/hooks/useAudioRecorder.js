@@ -1,12 +1,36 @@
 "use client";
 import { useState, useRef, useCallback } from "react";
 
+// Primary responsibility: Provides microphone recording helpers and stores the resulting audio Blob in global answer state.
+// Architecture role: Shared hook used by speaking question components to capture audio reliably across short recordings.
+
+/**
+ * @description React hook that manages a `MediaRecorder` lifecycle for microphone audio capture.
+ * Stores the final audio as a `Blob` under the `answer_audio` key using the provided setter.
+ *
+ * Why `recorder.start(1000)` exists:
+ * - Some browsers may not flush data reliably for very short recordings unless a timeslice is provided.
+ * - Collecting chunks every ~1s increases reliability when users stop quickly.
+ *
+ * @param {(key: string, value: any) => void} setAnswerKey - Store setter used to persist the recorded audio Blob.
+ * @param {number} maxDuration - Maximum allowed recording duration in seconds (reserved for future enforcement).
+ * @returns {{
+ *   startRecording: () => Promise<boolean>,
+ *   stopRecording: () => void,
+ *   cleanupStream: () => void,
+ *   error: string|null
+ * }} Recording controls and any microphone error message.
+ */
 export const useAudioRecorder = (setAnswerKey, maxDuration) => {
   const [error, setError] = useState(null);
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const chunksRef = useRef([]);
 
+  /**
+   * @description Requests microphone access and starts collecting audio chunks.
+   * @returns {Promise<boolean>} True when recording starts successfully; false when mic access fails.
+   */
   const startRecording = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -53,6 +77,10 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
     }
   }, [setAnswerKey]);
 
+  /**
+   * @description Stops the active recording session (if one is running). Triggers `MediaRecorder.onstop`.
+   * @returns {void}
+   */
   const stopRecording = useCallback(() => {
     if (
       mediaRecorderRef.current &&
@@ -63,6 +91,12 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
     }
   }, []);
 
+  /**
+   * @description Stops recording and releases any open microphone tracks.
+   * Use this on unmount to avoid leaving the microphone active.
+   *
+   * @returns {void}
+   */
   const cleanupStream = useCallback(() => {
     stopRecording();
     if (streamRef.current) {
