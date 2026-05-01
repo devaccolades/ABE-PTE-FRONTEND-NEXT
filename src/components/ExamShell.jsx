@@ -153,7 +153,9 @@ export default function ExamShell({ mocktestList }) {
    *
    * @returns {Promise<string|null>} Next question URL or null if the request fails.
    */
-  const sectionJump = async () => {
+  const sectionJump = async (attempts = 0) => {
+    if (attempts > 5) return null; // Prevent infinite polling if exam is actually completed
+
     const response = await fetch(
       `${baseUrl}question/?session_id=${sessionId}`,
       {
@@ -170,7 +172,7 @@ export default function ExamShell({ mocktestList }) {
     // We poll briefly to avoid advancing to a null/undefined URL.
     if (!data.next) {
       await new Promise((r) => setTimeout(r, 500));
-      return sectionJump();
+      return sectionJump(attempts + 1);
     }
 
     setNextQuestion(data.next);
@@ -201,10 +203,17 @@ export default function ExamShell({ mocktestList }) {
       setLoading(true);
       try {
         const res = await fetch(targetUrl);
-        if (!res.ok) throw new Error("Failed to fetch question");
+        if (!res.ok) {
+          if (res.status === 404) {
+            // Assume 404 on fetching question means exam is over
+            setCurrentQuestion(null);
+            return;
+          }
+          throw new Error("Failed to fetch question");
+        }
         const data = await res.json();
 
-        const q = data.results[0];
+        const q = data?.results?.[0];
         if (!q) {
           setCurrentQuestion(null);
           return;
