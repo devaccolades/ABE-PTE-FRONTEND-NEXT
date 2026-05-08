@@ -35,7 +35,6 @@ export function useSectionTimer(onTimeExpired) {
    */
   const getStartTime = () => {
     const saved = localStorage.getItem("section_time_left");
-    // console.log("local host time ", saved);
     if (saved !== null && saved !== "0") return parseInt(saved, 10);
 
     if (isMockTest) return 1800;
@@ -89,7 +88,6 @@ export function useSectionTimer(onTimeExpired) {
     const handleExpiry = () => {
       localStorage.setItem("section_time_left", "0");
       setGlobalRemainingTime(0);
-      console.log("time expires");
       setIsTimeExpired(true);
       if (onTimeExpired) {
         onTimeExpired();

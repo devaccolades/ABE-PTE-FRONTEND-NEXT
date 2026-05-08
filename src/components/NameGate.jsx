@@ -1,14 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useExamStore } from "@/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default function NameGate() {
+export default function NameGate({ mocktestList }) {
   const [name, setName] = useState("");
-  const [mocktestList, setMocktestList] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [selectedTest, setSelectedTest] = useState(null);
 
   const setSessionId = useExamStore((s) => s.setSessionId);
   const setMockTestId = useExamStore((s) => s.setMockTestId);
@@ -16,29 +15,7 @@ export default function NameGate() {
 
   const { setUserName } = useExamStore();
 
-  const [selectedTest, setSelectedTest] = useState(null);
   const canContinue = name.trim().length >= 2 && selectedTest;
-
-  // 🔹 Fetch mock test list ONCE
-  useEffect(() => {
-    const fetchMocktests = async () => {
-      try {
-        const res = await fetch(`${baseUrl}mocktest-list/`);
-
-        if (!res.ok) throw new Error("Failed to fetch mocktests");
-
-        const data = await res.json();
-        setMocktestList(data.data || []);
-        console.log("Fetched mocktests:", data.data);
-      } catch (err) {
-        console.error("Mocktest list error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchMocktests();
-  }, []);
 
   // 🔹 Start exam
   const handleContinue = async () => {
@@ -68,14 +45,6 @@ export default function NameGate() {
       console.error("Start exam error:", err);
     }
   };
-
-  if (loading) {
-    return (
-      <Card className="w-full max-w-2xl mx-auto">
-        <CardContent className="p-6">Loading tests...</CardContent>
-      </Card>
-    );
-  }
 
   return (
     <Card className="w-full max-w-2xl mx-auto">

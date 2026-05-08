@@ -16,7 +16,7 @@ export default async function Home() {
 
   return (
     <main className="min-h-dvh bg-gradient-to-b from-sky-50 to-white text-gray-900">
-      <div className="container mx-auto max-w-4xl p-6 min-h-dvh flex items-center justify-center">
+      <div className="container mx-auto max-w-4xl p-6 min-h-dvh flex items-center justify-center ">
         <ExamShell mocktestList={mocktestList} />
       </div>
     </main>
@@ -31,15 +31,14 @@ export default async function Home() {
  */
 async function getMocktestList() {
   try {
-    const res = await fetch(
-      "https://admin.abepte.accoladesweb.com/mocktest/mocktest-list/"
-    );
+    const res = await fetch("https://admin.pte.abeedu.com/mocktest/mocktest-list/")
 
     if (!res.ok) {
       throw new Error("Failed to fetch mocktest list");
     }
 
-    return await res.json();
+    const data = await res.json();
+    return data;
   } catch (error) {
     console.error("Error fetching mocktest list:", error);
     return { data: [] };

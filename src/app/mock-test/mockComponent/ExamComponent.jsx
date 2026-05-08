@@ -54,14 +54,11 @@ const ExamComponent = () => {
    */
   const handleSubmit = () => {
     setName(inputValue);
-    console.log(inputValue);
   };
-
-  //   console.log(selectedQuestion.name);
 
   useEffect(() => {
     if (selectedQuestion) {
-      console.log(currentQuestion);
+      // selectedQuestion and currentQuestion changes are handled elsewhere.
     }
   }, [selectedQuestion]);
 
@@ -81,7 +78,6 @@ const ExamComponent = () => {
     const currentPhase = useExamStore.getState().phase;
 
     // If not "finished", it means the user clicked Next while the timer was still running
-    console.log("phase", currentPhase);
     // Logic: If it's not finished, we need to manually end the recording
     if (currentPhase === "recording" || currentPhase === "prep") {
       setStopSignal(true);
@@ -105,7 +101,6 @@ const ExamComponent = () => {
       formData.append("answer_audio", finalAnswer.answer_audio, "answer.webm");
     }
 
-    console.log("answer", formData);
     // Handle Text Answers
     if (finalAnswer.answer !== undefined && finalAnswer.answer !== null) {
       const answerVal =
@@ -116,13 +111,10 @@ const ExamComponent = () => {
     }
 
     try {
-      console.log("answer", formData);
       const postRes = await fetch(`${baseUrl}single-response/`, {
         method: "POST",
         body: formData,
       });
-      // console.log("remain time from shell after submission ", remainingTime);
-
       if (!postRes.ok) throw new Error("Submission Failed");
 
       toast.success("Successfully completed the submission try next one!");

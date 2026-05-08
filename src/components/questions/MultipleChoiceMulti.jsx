@@ -13,7 +13,7 @@ export default function MultipleChoiceMulti({
   const setPhase = useExamStore((s) => s.setPhase);
 
   const handleTimeExpired = useCallback(() => {
-    console.log("Section time expired");
+    // Section timer expired; update phase through timer hook.
   }, []);
 
   const { formattedTime, isExpired } = useSectionTimer(handleTimeExpired);

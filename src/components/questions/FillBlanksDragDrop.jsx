@@ -17,7 +17,7 @@ export default function FillBlanksDragDrop({
   const [selectedOption, setSelectedOption] = useState(null); // For Mobile Tap-to-Fill
 
   const handleSectionTimeExpired = useCallback(() => {
-    console.log("Time expired");
+    // Section timer expired; allow parent flow to handle phase changes.
   }, []);
 
   const { formattedTime, isExpired: isSectionExpired } = useSectionTimer(
