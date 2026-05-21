@@ -119,10 +119,12 @@ export default function SummarizeTheText({
           </h2>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <SectionTimerDisplay
-            formattedTime={formattedTime}
-            isExpired={isSectionExpired}
-          />
+          {subsection !== "summarize_spoken_text" && (
+            <SectionTimerDisplay
+              formattedTime={formattedTime}
+              isExpired={isSectionExpired}
+            />
+          )}
           {subsection === "summarize_spoken_text" && (
             <IndividualQuestionTimer
               initialSeconds={600}

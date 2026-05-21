@@ -15,7 +15,7 @@ export default function ReorderParagraphs({
 
   // --- Timer Logic ---
   const handleSectionTimeExpired = useCallback(() => {
-    console.log("Section time expired.");
+    // Section timer expired; preserve current selected order.
   }, []);
 
   const { formattedTime, isExpired } = useSectionTimer(handleSectionTimeExpired);

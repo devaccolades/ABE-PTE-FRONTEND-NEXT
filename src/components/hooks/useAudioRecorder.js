@@ -43,16 +43,13 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) {
           chunksRef.current.push(e.data);
-          console.log("Chunk received:", e.data.size); // Debugging
         }
       };
 
       recorder.onstop = () => {
         // Create the Blob from chunks gathered so far
-        console.log("entered to the onStop");
         if (chunksRef.current.length > 0) {
           const audioBlob = new Blob(chunksRef.current, { type: "audio/webm" });
-          console.log("Blob created successfully:", audioBlob.size);
           setAnswerKey("answer_audio", audioBlob);
         } else {
           console.error("No audio chunks found at stop.");
@@ -86,7 +83,6 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
       mediaRecorderRef.current &&
       mediaRecorderRef.current.state !== "inactive"
     ) {
-      console.log("calling the stopp");
       mediaRecorderRef.current.stop();
     }
   }, []);

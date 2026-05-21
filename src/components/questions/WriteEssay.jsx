@@ -140,7 +140,7 @@ export default function WriteEssay({ promptText, questionId, subsection }) {
 function RichTextDisplay({ htmlContent }) {
   return (
     <div
-      className="prose prose-sm md:prose-base max-w-none text-gray-800"
+      className="prose prose-sm md:prose-base max-w-none text-gray-800 select-none"
       dangerouslySetInnerHTML={{ __html: htmlContent }}
     />
   );

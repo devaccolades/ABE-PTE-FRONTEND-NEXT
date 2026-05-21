@@ -109,12 +109,16 @@ export default function ExamShell({ mocktestList }) {
   // Heartbeat: helps distinguish "refresh" vs "tab closed then revisit"
   useEffect(() => {
     const now = Date.now();
-    const lastBeat = parseInt(localStorage.getItem("exam_heartbeat") || "0", 10);
+    const lastBeat = parseInt(
+      localStorage.getItem("exam_heartbeat") || "0",
+      10,
+    );
 
     let navType = "unknown";
     try {
       const navEntry = performance.getEntriesByType("navigation")?.[0];
-      if (navEntry && typeof navEntry.type === "string") navType = navEntry.type;
+      if (navEntry && typeof navEntry.type === "string")
+        navType = navEntry.type;
     } catch {
       // ignore
     }
@@ -154,7 +158,7 @@ export default function ExamShell({ mocktestList }) {
    * @returns {Promise<string|null>} Next question URL or null if the request fails.
    */
   const sectionJump = async (attempts = 0) => {
-    if (attempts > 5) return null; // Prevent infinite polling if exam is actually completed
+    if (attempts > 5) return null;
 
     const response = await fetch(
       `${baseUrl}question/?session_id=${sessionId}`,
@@ -164,9 +168,13 @@ export default function ExamShell({ mocktestList }) {
       },
     );
 
+    console.log("response is", response);
+
     if (!response.ok) return null;
 
     const data = await response.json();
+    console.log("data is", data);
+    console.log("response.url", response.url);
 
     // Backend may need time to calculate the next question after a forced section jump.
     // We poll briefly to avoid advancing to a null/undefined URL.
@@ -176,7 +184,7 @@ export default function ExamShell({ mocktestList }) {
     }
 
     setNextQuestion(data.next);
-    return data.next;
+    return response.url;
   };
 
   useEffect(() => {
@@ -233,11 +241,22 @@ export default function ExamShell({ mocktestList }) {
         localStorage.setItem("next_question", data.next);
         localStorage.setItem("startExam", startExam);
 
-        if (q.mocktest_section.section_name !== questionSection) {
-          const newSectionName = q.mocktest_section.section_name;
-          const newSectionTotal = q.mocktest_section.total_duration;
+        const newSectionName = q.mocktest_section.section_name;
+        const isWritingQuestion =
+          q.subsection === "write_essay" ||
+          q.subsection === "summarize_written_text";
+
+        if (
+          q.mocktest_section.section_name !== questionSection ||
+          isWritingQuestion
+        ) {
+          const newSectionTotal =
+            isWritingQuestion && Number.isFinite(q.answering_time)
+              ? q.answering_time
+              : q.mocktest_section.total_duration;
 
           // If we have a persisted timer for THIS section, prefer it (refresh survival).
+          // But for writing questions, always use the current question's answering_time.
           const persistedSection = localStorage.getItem(
             "exam_remaining_time_section",
           );
@@ -246,11 +265,12 @@ export default function ExamShell({ mocktestList }) {
             persistedTimeRaw !== null ? parseInt(persistedTimeRaw, 10) : NaN;
 
           const shouldUsePersisted =
+            !isWritingQuestion &&
             persistedSection === newSectionName &&
             Number.isFinite(persistedTime) &&
             persistedTime >= 0;
 
-          setQuestionSection(q.mocktest_section.section_name);
+          setQuestionSection(newSectionName);
           setQuestionTimer(newSectionTotal);
 
           const nextRemaining = shouldUsePersisted
@@ -263,6 +283,8 @@ export default function ExamShell({ mocktestList }) {
           // If it's a refresh in the same section, we keep the persisted value.
           localStorage.setItem("exam_remaining_time", String(nextRemaining));
           localStorage.setItem("exam_remaining_time_section", newSectionName);
+          // Clear the local precise timer so the new question component picks up the new global time
+          localStorage.removeItem("section_time_left");
         }
 
         // Ensure the outgoing answer payload contains stable metadata needed by the backend for submission.
@@ -286,8 +308,6 @@ export default function ExamShell({ mocktestList }) {
       setPhase,
     ],
   );
-
-  console.log(currentQuestion, "data check");
 
   useEffect(() => {
     // Rehydration: restore the session id and display name from localStorage for refresh survival.
@@ -322,7 +342,10 @@ export default function ExamShell({ mocktestList }) {
     if (!Number.isFinite(remainingTime)) return;
     localStorage.setItem("exam_remaining_time", String(remainingTime));
     if (questionSection) {
-      localStorage.setItem("exam_remaining_time_section", String(questionSection));
+      localStorage.setItem(
+        "exam_remaining_time_section",
+        String(questionSection),
+      );
     }
   }, [remainingTime, questionSection]);
 
@@ -379,8 +402,13 @@ export default function ExamShell({ mocktestList }) {
       resetAnswer();
 
       if (isTimeExpired) {
+        // console.log("Section timer expired");
         // Timer expiry path: backend may require a special jump to the correct next question for the next section.
         const jumpedNextUrl = await sectionJump();
+        console.log(
+          "Jumped to next question URL after timer expiry:",
+          jumpedNextUrl,
+        );
 
         if (jumpedNextUrl) {
           await loadQuestion(jumpedNextUrl);
@@ -411,6 +439,15 @@ export default function ExamShell({ mocktestList }) {
     }
   };
 
+  // Auto‑advance when a speaking/recording question finishes (global phase === "finished")
+  useEffect(() => {
+    if (phase === "finished" && !isSubmittingRef.current) {
+      handleModalNext();
+    }
+  }, [phase, handleModalNext]);
+
+
+
   useEffect(() => {
     // Auto-advance when the section timer expires. Using a timeout avoids calling submission logic during render.
     if (!isTimeExpired) return;
@@ -429,7 +466,7 @@ export default function ExamShell({ mocktestList }) {
 
   return (
     <>
-      <Card className="w-full max-w-4xl mx-auto shadow-lg border-none md:border sm:rounded-xl rounded-none">
+      <Card className="w-full max-w-4xl mx-auto shadow-lg border-none md:border sm:rounded-xl rounded-none ">
         {/* Header: Adjusted padding and text size for mobile */}
         <CardHeader className="bg-slate-50 p-4 md:p-6">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 w-full">
@@ -496,8 +533,6 @@ export default function ExamShell({ mocktestList }) {
 function renderQuestionComponent(q, onNext, remainingTime) {
   const id = q.id;
   const sub = q.subsection;
-
-  console.log(q, "checking questions");
 
   switch (sub) {
     // --- Speaking ---

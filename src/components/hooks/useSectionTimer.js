@@ -35,7 +35,6 @@ export function useSectionTimer(onTimeExpired) {
    */
   const getStartTime = () => {
     const saved = localStorage.getItem("section_time_left");
-    // console.log("local host time ", saved);
     if (saved !== null && saved !== "0") return parseInt(saved, 10);
 
     if (isMockTest) return 1800;
@@ -46,16 +45,8 @@ export function useSectionTimer(onTimeExpired) {
   const timeLeftRef = useRef(getStartTime());
 
   // --- 1. SYNC WITH STORE CHANGES ---
-  // If the store changes significantly (e.g., a new section loads), update local timer
-  useEffect(() => {
-    const startTime = isMockTest ? 1800 : storeRemainingTime;
-
-    // Only force update if the store has a value and it differs from our current ref
-    if (startTime > 0 && Math.abs(startTime - timeLeftRef.current) > 5) {
-      setTimeLeft(startTime);
-      timeLeftRef.current = startTime;
-    }
-  }, [storeRemainingTime, isMockTest]);
+  // Removed: syncing with storeRemainingTime here causes a race condition when components unmount/remount
+  // rapidly. Instead, ExamShell will clear `section_time_left` from localStorage when a true section change occurs.
 
   // --- 2. THE COUNTDOWN ENGINE ---
   useEffect(() => {
@@ -89,7 +80,6 @@ export function useSectionTimer(onTimeExpired) {
     const handleExpiry = () => {
       localStorage.setItem("section_time_left", "0");
       setGlobalRemainingTime(0);
-      console.log("time expires");
       setIsTimeExpired(true);
       if (onTimeExpired) {
         onTimeExpired();

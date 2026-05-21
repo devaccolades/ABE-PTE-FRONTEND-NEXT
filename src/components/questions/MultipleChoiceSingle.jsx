@@ -26,7 +26,7 @@ export default function MultipleChoiceSingle({
 
   // --- 1. Timer Integration ---
   const handleTimeExpired = useCallback(() => {
-    console.log("Section time expired in Multiple Choice Single.");
+    // Section timer expired; propagate state via the section timer hook.
   }, []);
 
   const { formattedTime, isExpired } = useSectionTimer(handleTimeExpired);

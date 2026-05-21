@@ -57,7 +57,6 @@ export default function ReadAloud({
   // useEffect(() => {
   //   if (isSectionExpired) {
   //     setStopSignal(true);
-  //     console.log("time end ");
   //   }
   // }, [isSectionExpired]);
 
