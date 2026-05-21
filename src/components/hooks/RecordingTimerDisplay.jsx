@@ -4,7 +4,7 @@ import { Progress } from "../ui/progress";
 import { PHASES } from "./useRecordingTimer";
 
 // import { Progress } from "@/components/ui/progress";
-// import { PHASES } from "@/hooks/useRecordingTimer"; 
+// import { PHASES } from "@/hooks/useRecordingTimer";
 
 /**
  * Renders the countdown timers and progress bars for the recording process.

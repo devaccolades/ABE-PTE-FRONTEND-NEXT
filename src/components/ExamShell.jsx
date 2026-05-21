@@ -109,12 +109,16 @@ export default function ExamShell({ mocktestList }) {
   // Heartbeat: helps distinguish "refresh" vs "tab closed then revisit"
   useEffect(() => {
     const now = Date.now();
-    const lastBeat = parseInt(localStorage.getItem("exam_heartbeat") || "0", 10);
+    const lastBeat = parseInt(
+      localStorage.getItem("exam_heartbeat") || "0",
+      10,
+    );
 
     let navType = "unknown";
     try {
       const navEntry = performance.getEntriesByType("navigation")?.[0];
-      if (navEntry && typeof navEntry.type === "string") navType = navEntry.type;
+      if (navEntry && typeof navEntry.type === "string")
+        navType = navEntry.type;
     } catch {
       // ignore
     }
@@ -163,16 +167,14 @@ export default function ExamShell({ mocktestList }) {
         headers: { "timer-exceeded": "true" },
       },
     );
-    
-    console.log('response is',response);
-    
+
+    console.log("response is", response);
 
     if (!response.ok) return null;
 
     const data = await response.json();
-    console.log('data is',data);
-    console.log('response.url', response.url);
-    
+    console.log("data is", data);
+    console.log("response.url", response.url);
 
     // Backend may need time to calculate the next question after a forced section jump.
     // We poll briefly to avoid advancing to a null/undefined URL.
@@ -244,7 +246,10 @@ export default function ExamShell({ mocktestList }) {
           q.subsection === "write_essay" ||
           q.subsection === "summarize_written_text";
 
-        if (q.mocktest_section.section_name !== questionSection || isWritingQuestion) {
+        if (
+          q.mocktest_section.section_name !== questionSection ||
+          isWritingQuestion
+        ) {
           const newSectionTotal =
             isWritingQuestion && Number.isFinite(q.answering_time)
               ? q.answering_time
@@ -278,6 +283,8 @@ export default function ExamShell({ mocktestList }) {
           // If it's a refresh in the same section, we keep the persisted value.
           localStorage.setItem("exam_remaining_time", String(nextRemaining));
           localStorage.setItem("exam_remaining_time_section", newSectionName);
+          // Clear the local precise timer so the new question component picks up the new global time
+          localStorage.removeItem("section_time_left");
         }
 
         // Ensure the outgoing answer payload contains stable metadata needed by the backend for submission.
@@ -335,7 +342,10 @@ export default function ExamShell({ mocktestList }) {
     if (!Number.isFinite(remainingTime)) return;
     localStorage.setItem("exam_remaining_time", String(remainingTime));
     if (questionSection) {
-      localStorage.setItem("exam_remaining_time_section", String(questionSection));
+      localStorage.setItem(
+        "exam_remaining_time_section",
+        String(questionSection),
+      );
     }
   }, [remainingTime, questionSection]);
 
@@ -395,7 +405,10 @@ export default function ExamShell({ mocktestList }) {
         // console.log("Section timer expired");
         // Timer expiry path: backend may require a special jump to the correct next question for the next section.
         const jumpedNextUrl = await sectionJump();
-        console.log("Jumped to next question URL after timer expiry:", jumpedNextUrl);
+        console.log(
+          "Jumped to next question URL after timer expiry:",
+          jumpedNextUrl,
+        );
 
         if (jumpedNextUrl) {
           await loadQuestion(jumpedNextUrl);
@@ -425,6 +438,15 @@ export default function ExamShell({ mocktestList }) {
       isSubmittingRef.current = false;
     }
   };
+
+  // Auto‑advance when a speaking/recording question finishes (global phase === "finished")
+  useEffect(() => {
+    if (phase === "finished" && !isSubmittingRef.current) {
+      handleModalNext();
+    }
+  }, [phase, handleModalNext]);
+
+
 
   useEffect(() => {
     // Auto-advance when the section timer expires. Using a timeout avoids calling submission logic during render.

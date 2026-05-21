@@ -45,16 +45,8 @@ export function useSectionTimer(onTimeExpired) {
   const timeLeftRef = useRef(getStartTime());
 
   // --- 1. SYNC WITH STORE CHANGES ---
-  // If the store changes significantly (e.g., a new section loads), update local timer
-  useEffect(() => {
-    const startTime = isMockTest ? 1800 : storeRemainingTime;
-
-    // Only force update if the store has a value and it differs from our current ref
-    if (startTime > 0 && Math.abs(startTime - timeLeftRef.current) > 5) {
-      setTimeLeft(startTime);
-      timeLeftRef.current = startTime;
-    }
-  }, [storeRemainingTime, isMockTest]);
+  // Removed: syncing with storeRemainingTime here causes a race condition when components unmount/remount
+  // rapidly. Instead, ExamShell will clear `section_time_left` from localStorage when a true section change occurs.
 
   // --- 2. THE COUNTDOWN ENGINE ---
   useEffect(() => {
