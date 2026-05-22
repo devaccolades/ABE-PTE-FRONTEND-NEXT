@@ -59,8 +59,8 @@ export const useExamStore = create((set, get) => ({
   // Section-level remaining time (persisted). This is used to resume the exam section timer after refresh.
   remainingTime: 0,
   startExam: false,
-  baseUrl: "https://admin.pte.abeedu.com/mocktest/",
-  // baseUrl: "https://admin.abepte.accoladesweb.com/mocktest/",
+  // baseUrl: "https://admin.pte.abeedu.com/mocktest/",
+  baseUrl: "https://admin.abepte.accoladesweb.com/mocktest/",
   // baseUrl: "http://192.168.29.96:8000/mocktest/",
   // Current answer payload for the active question only (resets on question transitions).
   answer: {
