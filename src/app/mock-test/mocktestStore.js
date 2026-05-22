@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { MOCKTEST_BASE_URL } from "@/store";
 
 // Primary responsibility: Holds client-side state for the mock-test practice route.
 // Architecture role: Lightweight store for selecting categories/questions and capturing single-question answers.
@@ -89,6 +90,6 @@ export const mocktestStore = create((set) => ({
       },
     })),
 
-  baseUrl: "https://admin.pte.abeedu.com/mocktest/",
+  baseUrl: MOCKTEST_BASE_URL,
   // baseUrl: "https://admin.abepte.accoladesweb.com/mocktest/",
 }));
