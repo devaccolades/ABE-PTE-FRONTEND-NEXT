@@ -1,7 +1,5 @@
-import NameGate from "@/components/NameGate";
 import ExamShell from "@/components/ExamShell";
-import { useExamStore } from "@/store";
-import HomeWrapper from "@/components/HomeWrapper";
+import { MOCKTEST_BASE_URL } from "@/store";
 
 // Primary responsibility: Server entry route that fetches mock test data and renders the exam shell.
 // Architecture role: Bridges initial server-side data fetching to the client-side exam runtime.
@@ -31,7 +29,7 @@ export default async function Home() {
  */
 async function getMocktestList() {
   try {
-    const res = await fetch("https://admin.pte.abeedu.com/mocktest/mocktest-list/")
+    const res = await fetch(`${MOCKTEST_BASE_URL}mocktest-list/`);
 
     if (!res.ok) {
       throw new Error("Failed to fetch mocktest list");
