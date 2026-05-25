@@ -65,10 +65,10 @@ export default function AudioHighlightBox({
 
     // Condition: Enable "Next" if the section expired OR the audio status is "FINISHED"
     // It no longer depends on whether a word is highlighted (highlighted.size)
-    const canMoveToNext = isSectionExpired || status === "FINISHED";
-
-    if (canMoveToNext) {
+    if (isSectionExpired) {
       setPhase("finished");
+    } else if (status === "FINISHED") {
+      setPhase("writing");
     } else {
       setPhase("prep");
     }

@@ -54,7 +54,7 @@ export default function MultipleChoiceSingle({
     if (isExpired) {
       setPhase("finished");
     } else if (selectedId !== null) {
-      setPhase("finished");
+      setPhase("writing");
     } else {
       setPhase("prep");
     }
