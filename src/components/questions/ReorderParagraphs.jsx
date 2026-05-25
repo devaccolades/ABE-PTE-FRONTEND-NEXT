@@ -18,17 +18,22 @@ export default function ReorderParagraphs({
     // Section timer expired; preserve current selected order.
   }, []);
 
-  const { formattedTime, isExpired } = useSectionTimer(handleSectionTimeExpired);
+  const { formattedTime, isExpired } = useSectionTimer(
+    handleSectionTimeExpired,
+  );
 
   // --- Data Initialization with Correct Randomization Sequence ---
   const initialSource = useMemo(() => {
     // 1. Create a copy of the raw items to shuffle
     const shuffledItems = [...items];
-    
+
     // 2. Shuffle using Fisher-Yates Algorithm FIRST
     for (let i = shuffledItems.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [shuffledItems[i], shuffledItems[j]] = [shuffledItems[j], shuffledItems[i]];
+      [shuffledItems[i], shuffledItems[j]] = [
+        shuffledItems[j],
+        shuffledItems[i],
+      ];
     }
 
     // 3. Map to internal format and assign A, B, C, D labels based on the NEW order
@@ -48,13 +53,13 @@ export default function ReorderParagraphs({
       acc[index + 1] = item.id;
       return acc;
     }, {});
-    
+
     setAnswerKey("answer", answerMapping);
 
     if (isExpired) {
       setGlobalPhase("finished");
     } else if (source.length === 0 && target.length > 0) {
-      setGlobalPhase("finished");
+      setGlobalPhase("writing");
     } else {
       setGlobalPhase("prep");
     }
@@ -96,7 +101,8 @@ export default function ReorderParagraphs({
   }
 
   function onDropToTargetAtPosition(e, position) {
-    e.preventDefault(); e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
     if (isExpired) return;
     const data = safeParse(e.dataTransfer.getData("application/json"));
     if (!data) return;
@@ -128,15 +134,18 @@ export default function ReorderParagraphs({
           {subsection?.replace(/_/g, " ") || name}
         </h2>
         <div className="flex items-center gap-4">
-           {!isExpired && target.length > 0 && (
-             <button 
-               onClick={handleReset}
-               className="flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-red-500 transition-colors uppercase tracking-widest"
-             >
-               <RotateCcw className="w-3 h-3" /> Reset
-             </button>
-           )}
-           <SectionTimerDisplay formattedTime={formattedTime} isExpired={isExpired} />
+          {!isExpired && target.length > 0 && (
+            <button
+              onClick={handleReset}
+              className="flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-red-500 transition-colors uppercase tracking-widest"
+            >
+              <RotateCcw className="w-3 h-3" /> Reset
+            </button>
+          )}
+          <SectionTimerDisplay
+            formattedTime={formattedTime}
+            isExpired={isExpired}
+          />
         </div>
       </div>
 
@@ -145,7 +154,9 @@ export default function ReorderParagraphs({
       </p>
 
       {/* Main Grid */}
-      <div className={`grid grid-cols-1 lg:grid-cols-2 gap-4 transition-all ${isExpired ? "opacity-60" : ""}`}>
+      <div
+        className={`grid grid-cols-1 lg:grid-cols-2 gap-4 transition-all ${isExpired ? "opacity-60" : ""}`}
+      >
         <Column
           title="Source"
           items={source}
@@ -167,27 +178,40 @@ export default function ReorderParagraphs({
   );
 }
 
-function Column({ title, items, onDropContainer, onDropAtPosition, onDragStart, onTapItem, isExpired }) {
+function Column({
+  title,
+  items,
+  onDropContainer,
+  onDropAtPosition,
+  onDragStart,
+  onTapItem,
+  isExpired,
+}) {
   const isSource = title.toLowerCase() === "source";
   return (
-    <div 
+    <div
       className="rounded-xl border border-gray-200 bg-white p-3 md:p-4 min-h-[300px] lg:h-[500px] flex flex-col"
       onDragOver={(e) => isSource && e.preventDefault()}
       onDrop={isSource ? onDropContainer : undefined}
     >
-      <div className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-widest border-b pb-2">{title}</div>
+      <div className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-widest border-b pb-2">
+        {title}
+      </div>
       <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar pr-1">
         {!isSource && !isExpired && (
-          <DropZone onDrop={(e) => onDropAtPosition?.(e, 0)} label={items.length === 0 ? "Drop here" : ""} />
+          <DropZone
+            onDrop={(e) => onDropAtPosition?.(e, 0)}
+            label={items.length === 0 ? "Drop here" : ""}
+          />
         )}
         {items.map((item, idx) => (
           <div key={item.id}>
-            <DraggableCard 
-              item={item} 
-              origin={title.toLowerCase()} 
-              onDragStart={onDragStart} 
-              onTap={() => onTapItem(item)} 
-              isExpired={isExpired} 
+            <DraggableCard
+              item={item}
+              origin={title.toLowerCase()}
+              onDragStart={onDragStart}
+              onTap={() => onTapItem(item)}
+              isExpired={isExpired}
             />
             {!isSource && !isExpired && (
               <DropZone onDrop={(e) => onDropAtPosition?.(e, idx + 1)} />
@@ -208,10 +232,14 @@ function DraggableCard({ item, origin, onDragStart, onTap, isExpired }) {
       className={`group rounded-lg border border-gray-200 bg-slate-50 p-3 md:p-4 shadow-sm transition-all cursor-pointer md:cursor-grab active:scale-95 md:active:scale-100 ${isExpired ? "opacity-70" : "hover:border-sky-400 hover:bg-white"}`}
     >
       <div className="flex items-start gap-3">
-        <div className={`h-6 w-6 shrink-0 rounded-full text-white grid place-items-center text-[10px] font-bold ${isExpired ? "bg-gray-300" : "bg-sky-600 group-hover:bg-sky-500"}`}>
+        <div
+          className={`h-6 w-6 shrink-0 rounded-full text-white grid place-items-center text-[10px] font-bold ${isExpired ? "bg-gray-300" : "bg-sky-600 group-hover:bg-sky-500"}`}
+        >
           {item.label}
         </div>
-        <div className="text-sm md:text-base text-gray-800 leading-snug">{item.text}</div>
+        <div className="text-sm md:text-base text-gray-800 leading-snug">
+          {item.text}
+        </div>
       </div>
     </div>
   );
@@ -222,11 +250,19 @@ function DropZone({ onDrop, label = "" }) {
   return (
     <div
       className={`h-6 md:h-10 rounded-lg border-2 border-dashed transition-all flex items-center justify-center ${over ? "border-sky-500 bg-sky-50 h-12" : "border-gray-100 opacity-40"}`}
-      onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setOver(true);
+      }}
       onDragLeave={() => setOver(false)}
-      onDrop={(e) => { setOver(false); onDrop?.(e); }}
+      onDrop={(e) => {
+        setOver(false);
+        onDrop?.(e);
+      }}
     >
-      {label && <span className="text-[10px] text-gray-400 uppercase">{label}</span>}
+      {label && (
+        <span className="text-[10px] text-gray-400 uppercase">{label}</span>
+      )}
     </div>
   );
 }

@@ -90,15 +90,16 @@ export default function AudioToMCQ({
     });
   };
 
-  // --- UPDATED PHASE LOGIC ---
   useEffect(() => {
     setAnswerKey("answer", Array.from(selectedIds).join(","));
 
-    // Logic: Enable "Next" if the section timer ran out OR the audio status is "FINISHED"
-    // The user does NOT need to select an option anymore to enable the button.
-    const canMoveToNext = isSectionExpired || status === "FINISHED";
-
-    setPhase(canMoveToNext ? "finished" : "prep");
+    if (isSectionExpired) {
+      setPhase("finished");
+    } else if (status === "FINISHED") {
+      setPhase("writing");
+    } else {
+      setPhase("prep");
+    }
   }, [selectedIds, isSectionExpired, status, setPhase, setAnswerKey]);
 
   return (

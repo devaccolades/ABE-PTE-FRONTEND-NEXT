@@ -58,9 +58,23 @@ const ExamComponent = () => {
 
   useEffect(() => {
     if (selectedQuestion) {
-      // selectedQuestion and currentQuestion changes are handled elsewhere.
+      const isReadingQuestion =
+        [
+          "fib_dropdown",
+          "fib_drag_drop",
+          "mc_multiple",
+          "mc_single",
+          "reorder_paragraphs",
+          "mcq-multi",
+          "mcq-single",
+          "reorder-paragraphs",
+        ].includes(currentQuestion);
+
+      if (isReadingQuestion) {
+        console.log("📖 [Practice Fetch] Loaded Reading Question Data:", selectedQuestion);
+      }
     }
-  }, [selectedQuestion]);
+  }, [selectedQuestion, currentQuestion]);
 
   /**
    * @description Submits the current mock-test answer to the backend.
@@ -108,6 +122,26 @@ const ExamComponent = () => {
           ? JSON.stringify(finalAnswer.answer)
           : finalAnswer.answer;
       formData.append("answer", answerVal);
+    }
+
+    // Console log Reading section question answer when submitted in practice mode
+    const isReadingQuestion =
+      [
+        "fib_dropdown",
+        "fib_drag_drop",
+        "mc_multiple",
+        "mc_single",
+        "reorder_paragraphs",
+        "mcq-multi",
+        "mcq-single",
+        "reorder-paragraphs",
+      ].includes(currentQuestion);
+
+    if (isReadingQuestion) {
+      console.log("📝 [Practice Submit] Submitting Reading Answer:", {
+        question_name: selectedQuestion.name,
+        answer: finalAnswer.answer,
+      });
     }
 
     try {

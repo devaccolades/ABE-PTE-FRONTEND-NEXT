@@ -227,6 +227,24 @@ export default function ExamShell({ mocktestList }) {
           return;
         }
 
+        // Console log Reading section question data when fetched
+        const isReadingQuestion =
+          q.mocktest_section?.section_name?.toLowerCase().includes("reading") ||
+          [
+            "fib_dropdown",
+            "fib_drag_drop",
+            "mc_multiple",
+            "mc_single",
+            "reorder_paragraphs",
+            "mcq-multi",
+            "mcq-single",
+            "reorder-paragraphs",
+          ].includes(q.subsection);
+
+        if (isReadingQuestion) {
+          console.log("📖 [API Fetch] Loaded Reading Question Data:", q);
+        }
+
         // Reset per-question global flags before handing off to the next question component.
         setStopSignal(false);
         setPhase("prep");
@@ -388,6 +406,27 @@ export default function ExamShell({ mocktestList }) {
           ? JSON.stringify(finalAnswer.answer)
           : finalAnswer.answer;
       formData.append("answer", answerVal);
+    }
+
+    // Console log Reading section question answer when submitted
+    const isReadingQuestion =
+      currentQuestion?.mocktest_section?.section_name?.toLowerCase().includes("reading") ||
+      [
+        "fib_dropdown",
+        "fib_drag_drop",
+        "mc_multiple",
+        "mc_single",
+        "reorder_paragraphs",
+        "mcq-multi",
+        "mcq-single",
+        "reorder-paragraphs",
+      ].includes(currentQuestion?.subsection);
+
+    if (isReadingQuestion) {
+      console.log("📝 [API Submit] Submitting Reading Answer:", {
+        question_name: finalAnswer.question_name,
+        answer: finalAnswer.answer,
+      });
     }
 
     try {
