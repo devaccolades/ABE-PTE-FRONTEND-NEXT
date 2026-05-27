@@ -88,7 +88,7 @@ export default function FillBlanksTyped({
     }
 
     if (status === "ANSWER" || status === "FINISHED") {
-      setPhase("finished"); // Next enabled
+      setPhase("writing");
     } else {
       setPhase("prep"); // Next disabled, but input allowed during PLAYING
     }
@@ -176,22 +176,25 @@ export default function FillBlanksTyped({
           <React.Fragment key={i}>
             <span className="select-none whitespace-pre-wrap">{seg}</span>
             {i < blankCount && (
-              <input
-                type="text"
-                autoComplete="off"
-                spellCheck={false}
-                value={values[i]}
-                onChange={(e) => {
-                  const next = [...values];
-                  next[i] = e.target.value;
-                  setValues(next);
-                }}
-                disabled={
-                  status === "LOADING" || status === "PREP" || isSectionExpired
-                }
-                className="inline-block h-8 md:h-10 w-[100px] md:w-[160px] mx-1 md:mx-2 px-2 md:px-4 align-middle text-center text-sky-600 font-bold border-b-2 border-slate-200 bg-slate-50 focus:bg-white focus:border-sky-500 outline-none transition-all rounded text-sm md:text-lg"
-                placeholder={`${i + 1}`}
-              />
+              <>
+                <input
+                  type="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={values[i]}
+                  onChange={(e) => {
+                    const next = [...values];
+                    next[i] = e.target.value;
+                    setValues(next);
+                  }}
+                  disabled={
+                    status === "LOADING" || status === "PREP" || isSectionExpired
+                  }
+                  className="inline-block h-8 md:h-10 w-[100px] md:w-[160px] mx-1 md:mx-2 px-2 md:px-4 align-middle text-center text-sky-600 font-bold border-b-2 border-slate-200 bg-slate-50 focus:bg-white focus:border-sky-500 outline-none transition-all rounded text-sm md:text-lg"
+                  placeholder={`${i + 1}`}
+                />
+                {" "}
+              </>
             )}
           </React.Fragment>
         ))}
