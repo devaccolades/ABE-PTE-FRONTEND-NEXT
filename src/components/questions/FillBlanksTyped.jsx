@@ -179,6 +179,7 @@ export default function FillBlanksTyped({
               <input
                 type="text"
                 autoComplete="off"
+                spellCheck={false}
                 value={values[i]}
                 onChange={(e) => {
                   const next = [...values];

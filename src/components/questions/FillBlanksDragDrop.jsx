@@ -197,6 +197,10 @@ function DropTarget({
   return (
     <span
       onClick={onClick}
+      draggable={!!filledValue && !disabled}
+      onDragStart={(e) => {
+        if (filledValue) onDragStart(e, filledValue, blankNumber);
+      }}
       onDragOver={(e) => {
         e.preventDefault();
         if (!disabled) setIsOver(true);
