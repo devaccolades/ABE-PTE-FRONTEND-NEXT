@@ -268,10 +268,16 @@ export default function ExamShell({ mocktestList }) {
           q.mocktest_section.section_name !== questionSection ||
           isWritingQuestion
         ) {
+          const isListeningSection = newSectionName
+            ?.toLowerCase()
+            .includes("listening");
+
           const newSectionTotal =
             isWritingQuestion && Number.isFinite(q.answering_time)
               ? q.answering_time
-              : q.mocktest_section.total_duration;
+              : isListeningSection
+                ? Math.max(0, q.mocktest_section.total_duration - 600)
+                : q.mocktest_section.total_duration;
 
           // If we have a persisted timer for THIS section, prefer it (refresh survival).
           // But for writing questions, always use the current question's answering_time.
@@ -410,7 +416,9 @@ export default function ExamShell({ mocktestList }) {
 
     // Console log Reading section question answer when submitted
     const isReadingQuestion =
-      currentQuestion?.mocktest_section?.section_name?.toLowerCase().includes("reading") ||
+      currentQuestion?.mocktest_section?.section_name
+        ?.toLowerCase()
+        .includes("reading") ||
       [
         "fib_dropdown",
         "fib_drag_drop",
@@ -484,8 +492,6 @@ export default function ExamShell({ mocktestList }) {
       handleModalNext();
     }
   }, [phase, handleModalNext]);
-
-
 
   useEffect(() => {
     // Auto-advance when the section timer expires. Using a timeout avoids calling submission logic during render.

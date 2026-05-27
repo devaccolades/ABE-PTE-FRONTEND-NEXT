@@ -203,6 +203,7 @@ const ExamComponent = () => {
             <div className="mt-6 flex flex-col gap-4">
               <input
                 type="text"
+                spellCheck={false}
                 placeholder="Your name"
                 className="w-full px-4 py-3 rounded-lg border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition"
                 onChange={(e) => setInputValue(e.target.value)}
