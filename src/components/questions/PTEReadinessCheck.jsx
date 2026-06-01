@@ -11,7 +11,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export default function PTEReadinessCheck({ onProceed }) {
+export default function PTEReadinessCheck({
+  name = "",
+  onProceed }) {
   const [agreed, setAgreed] = useState(false);
 
   const requirements = [

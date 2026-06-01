@@ -516,7 +516,7 @@ export default function ExamShell({ mocktestList }) {
         <CardHeader className="bg-slate-50 p-4 md:p-6">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 w-full">
             <CardTitle className="text-sky-800 text-lg md:text-xl">
-              {titleFor(currentQuestion.subsection)}
+              {titleFor(currentQuestion)}
             </CardTitle>
             <div className="text-xs md:text-sm text-gray-500">
               Candidate:{" "}
@@ -600,6 +600,7 @@ function renderQuestionComponent(q, onNext, remainingTime) {
           imageUrl={q.image}
           prepSeconds={q.reading_time}
           recordSeconds={q.answering_time}
+          name={q.name}
           onNext={onNext}
         />
       );
@@ -618,6 +619,7 @@ function renderQuestionComponent(q, onNext, remainingTime) {
           recordSeconds={q.answering_time}
           text={q.text}
           subsection={sub}
+          name={q.name}
           onNext={onNext}
         />
       );
@@ -631,6 +633,7 @@ function renderQuestionComponent(q, onNext, remainingTime) {
           promptText={q.text}
           durationSeconds={remainingTime}
           subsection={sub}
+          name={q.name}
           onNext={onNext}
         />
       );
@@ -652,6 +655,7 @@ function renderQuestionComponent(q, onNext, remainingTime) {
         <FillBlanksDropdown
           key={id}
           segments={q.sub_questions}
+          name={q.name}
           onNext={onNext}
         />
       );
@@ -663,6 +667,7 @@ function renderQuestionComponent(q, onNext, remainingTime) {
           segments={q.text} // Your text segments
           options={q.options} // The array of 6 objects you provided
           subsection={q.subsection}
+          name={q.name}
         />
       );
 
@@ -673,6 +678,7 @@ function renderQuestionComponent(q, onNext, remainingTime) {
           paragraphs={q.text}
           // questionText={q.questionText}
           options={q.options}
+          name={q.name}
           onNext={onNext}
         />
       );
@@ -684,12 +690,13 @@ function renderQuestionComponent(q, onNext, remainingTime) {
           paragraphs={q.text}
           // questionText={q.text}
           options={q.options}
+          name={q.name}
           onNext={onNext}
         />
       );
 
     case "reorder_paragraphs":
-      return <ReorderParagraphs key={id} items={q.options} onNext={onNext} />;
+      return <ReorderParagraphs key={id} items={q.options} name={q.name} onNext={onNext} />;
 
     // --- Listening ---
     case "summarize_spoken_text":
@@ -701,6 +708,7 @@ function renderQuestionComponent(q, onNext, remainingTime) {
           prepSeconds={q.reading_time}
           subsection={sub}
           questionId={id}
+          name={q.name}
           onNext={onNext}
         />
       );
@@ -715,8 +723,9 @@ function renderQuestionComponent(q, onNext, remainingTime) {
           type={q.subsection}
           audioSrc={q.audio}
           options={q.options}
-          onNext={onNext}
           text={q.text}
+          name={q.name}
+          onNext={onNext}
         />
       );
 
@@ -727,6 +736,7 @@ function renderQuestionComponent(q, onNext, remainingTime) {
           textString={q.text}
           audioSrc={q.audio}
           durationSeconds={q.durationSeconds}
+          name={q.name}
           onNext={onNext}
         />
       );
@@ -737,6 +747,7 @@ function renderQuestionComponent(q, onNext, remainingTime) {
           key={id}
           audioSrc={q.audio}
           text={q.text}
+          name={q.name}
           onNext={onNext}
         />
       );
@@ -777,36 +788,52 @@ function renderQuestionComponent(q, onNext, remainingTime) {
  * @param {string} sub - Backend subsection identifier (e.g., "read_aloud", "mc_single").
  * @returns {string} Human-friendly title string for the current question type.
  */
-function titleFor(sub) {
+function titleFor(q) {
+  if (!q) return "Mock Test Question";
+  
+  const section = q.mocktest_section?.section_name || "";
+  const sub = q.subsection || "";
+
   const map = {
-    read_aloud: "Speaking: Read Aloud",
-    describe_image: "Speaking: Describe Image",
-    answer_short_question: "Speaking: Answer Short Question",
-    respond_to_a_situation: "Speaking: Respond to a Situation",
-    summarise_group_discussion: "Speaking: Summarize Group Discussion",
-    summarize_written_text: "Writing: Summarize Written Text",
-    write_essay: "Writing: Essay",
+    read_aloud: "Read Aloud",
+    describe_image: "Describe Image",
+    answer_short_question: "Answer Short Question",
+    respond_to_a_situation: "Respond to a Situation",
+    summarise_group_discussion: "Summarize Group Discussion",
+    summarize_written_text: "Summarize Written Text",
+    write_essay: "Essay",
     mc_multiple: "Multiple Choice Multiple Answers",
-    fib_drag_drop: "Fill in the blanks Drag and Drop",
+    fib_drag_drop: "Fill in the Blanks Drag and Drop",
     reorder_paragraphs: "Reorder Paragraphs",
     mc_single: "Multiple Choice Single Answer",
-    fib_dropdown: "Reading: Fill in the Blanks",
-    retell_lecture: "Speaking: Retell Lecture",
-    repeat_sentence: "Speaking: Repeat Sentence",
-    "mcq-multi": "Reading: Multiple Choice (Multiple)",
-    "mcq-single": "Reading: Multiple Choice (Single)",
-    "reorder-paragraphs": "Reading: Reorder Paragraphs",
-    "Write-from-Dictation": "Listening: Write from Dictation",
-    "summarize-spoken-text": "Listening: Summarize Spoken Text",
+    fib_dropdown: "Fill in the Blanks",
+    retell_lecture: "Retell Lecture",
+    repeat_sentence: "Repeat Sentence",
+    "mcq-multi": "Multiple Choice (Multiple)",
+    "mcq-single": "Multiple Choice (Single)",
+    "reorder-paragraphs": "Reorder Paragraphs",
+    "Write-from-Dictation": "Write from Dictation",
+    "summarize-spoken-text": "Summarize Spoken Text",
+    "summarize_spoken_text": "Summarize Spoken Text",
     write_from_dictation: "Write From Dictation",
     l_mc_multiple: "Multiple Choice Multiple Answers",
-    highlight_correct_summary: "Highlight Correct Summary ",
+    highlight_correct_summary: "Highlight Correct Summary",
     l_mc_single: "Multiple Choice Single Answer",
     select_missing_word: "Select Missing Word",
-    l_fill_in_blanks: "Listening Fill in the Blanks",
+    l_fill_in_blanks: "Fill in the Blanks",
     highlight_incorrect_words: "Highlight Incorrect Words",
   };
-  return map[sub] || "Mock Test Question";
+  
+  let formattedSub = map[sub] || map[sub.replace(/_/g, '-')] || sub.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  
+  if (formattedSub.startsWith("L ")) {
+    formattedSub = formattedSub.replace(/^L\s+/, "");
+  }
+  
+  if (section && formattedSub) {
+    return `${section} : ${formattedSub}`;
+  }
+  return formattedSub || "Mock Test Question";
 }
 
 /**

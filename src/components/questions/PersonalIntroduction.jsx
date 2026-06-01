@@ -9,7 +9,9 @@ import { UserCircle, Info } from "lucide-react";
  * - 50-word hard limit logic
  * - Real-time word counter with color-coded feedback
  */
-export default function PersonalIntroduction({ onComplete }) {
+export default function PersonalIntroduction({
+  name = "",
+  onComplete }) {
   const [text, setText] = useState("");
   const wordLimit = 50;
 

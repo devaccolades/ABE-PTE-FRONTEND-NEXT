@@ -8,7 +8,9 @@ import { useSectionTimer } from "../hooks/useSectionTimer";
 import SectionTimerDisplay from "../ui/SectionTimerDisplay";
 import IndividualQuestionTimer from "../ui/IndividualQuestionTimer";
 
-export default function WriteEssay({ promptText, questionId, subsection }) {
+export default function WriteEssay({
+  name = "",
+  promptText, questionId, subsection }) {
   const setPhase = useExamStore((s) => s.setPhase);
   const phase = useExamStore((s) => s.phase);
   const setAnswerKey = useExamStore((s) => s.setAnswerKey);
@@ -68,8 +70,8 @@ export default function WriteEssay({ promptText, questionId, subsection }) {
     <div className="space-y-4 md:space-y-6 max-w-full overflow-hidden">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-3 md:pb-4 gap-3">
         <h2 className="text-lg md:text-xl font-bold text-gray-800 tracking-tight uppercase">
-          {subsection?.replace(/_/g, " ")}
-        </h2>
+            {name}
+          </h2>
         <div className="flex flex-col items-end gap-1">
           {subsection === "summarize_written_text" ? (
             <IndividualQuestionTimer

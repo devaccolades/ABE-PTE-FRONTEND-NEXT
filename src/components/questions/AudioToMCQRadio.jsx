@@ -36,6 +36,14 @@ export default function AudioToMCQRadioAuto({
   const [error, setError] = useState("");
 
   const [selectedId, setSelectedId] = useState(null);
+  const [elapsed, setElapsed] = useState(0);
+  const [totalDuration, setTotalDuration] = useState(0);
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
 
   // Attach listeners to main audio
   useEffect(() => {
@@ -64,6 +72,8 @@ export default function AudioToMCQRadioAuto({
       try {
         if (el.duration && !isNaN(el.duration)) {
           setProgress((el.currentTime / el.duration) * 100);
+          setElapsed(el.currentTime);
+          setTotalDuration(el.duration);
         }
       } catch (e) {}
     }
@@ -92,6 +102,7 @@ export default function AudioToMCQRadioAuto({
     setSelectedId(null);
     setPlayedCount(0);
     setProgress(0);
+    setElapsed(0);
     setPlaying(false);
     setError("");
     setPhase(prepSeconds > 0 ? "prep" : "idle");
@@ -261,7 +272,7 @@ export default function AudioToMCQRadioAuto({
 
         <div className="mt-3 text-sm flex items-center justify-between">
           <div className="font-medium">Playback progress</div>
-          <div className="text-xs text-gray-600">{Math.round(progress)}%</div>
+          <div className="text-xs text-gray-600">{formatTime(elapsed)} / {formatTime(totalDuration)}</div>
         </div>
 
         <div className="w-full h-2 bg-gray-200 rounded mt-2 overflow-hidden">

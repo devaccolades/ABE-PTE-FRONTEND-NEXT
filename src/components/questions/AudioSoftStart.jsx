@@ -147,15 +147,11 @@ export default function AudioSoftStart({ onNext }) {
         <div className="bg-slate-50 border-t border-slate-200 p-6 flex justify-center">
           <Button
             onClick={onNext}
-            disabled={stage !== "FINISHED"}
-            className={`group px-10 py-6 rounded-full font-bold text-lg transition-all duration-300 ${
-              stage === "FINISHED"
-                ? "bg-sky-600 text-white hover:bg-sky-700 shadow-lg scale-100"
-                : "bg-slate-200 text-slate-400 scale-95 cursor-not-allowed"
-            }`}
+            disabled={false}
+            className={`group px-10 py-6 rounded-full font-bold text-lg transition-all duration-300 bg-sky-600 text-white hover:bg-sky-700 shadow-lg scale-100`}
           >
             Start Official Exam
-            <ArrowRight className={`ml-2 w-5 h-5 transition-transform ${stage === "FINISHED" ? "group-hover:translate-x-1" : ""}`} />
+            <ArrowRight className={`ml-2 w-5 h-5 transition-transform group-hover:translate-x-1`} />
           </Button>
         </div>
       </div>

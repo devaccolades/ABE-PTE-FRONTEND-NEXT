@@ -5,6 +5,7 @@ import { useSectionTimer } from "../hooks/useSectionTimer";
 import SectionTimerDisplay from "../ui/SectionTimerDisplay";
 
 export default function FillBlanksDragDrop({
+  name = "",
   segments = "",
   options = [],
   subsection = "Reading: Fill in the Blanks",
@@ -116,8 +117,8 @@ export default function FillBlanksDragDrop({
     <div className="space-y-4 md:space-y-6 max-w-full">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 gap-3">
         <h2 className="text-lg md:text-xl font-bold text-gray-800 uppercase tracking-tight">
-          {subsection}
-        </h2>
+            {name}
+          </h2>
         <SectionTimerDisplay
           formattedTime={formattedTime}
           isExpired={isSectionExpired}

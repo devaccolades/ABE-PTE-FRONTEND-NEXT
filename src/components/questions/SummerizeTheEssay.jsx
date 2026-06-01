@@ -3,6 +3,7 @@ import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 
 export default function SummerizeTheEssay({
+  name = "",
   promptText = "The quick brown fox jumps over the lazy dog.",
   output,
   prepSeconds = 0,
@@ -10,6 +11,13 @@ export default function SummerizeTheEssay({
   const [userText, setUserText] = useState("");
   const [playedCount, setPlayedCount] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+  const [totalDuration, setTotalDuration] = useState(0);
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
   const [prepLeft, setPrepLeft] = useState(prepSeconds || 0);
   const [phase, setPhase] = useState(prepSeconds > 0 ? "prep" : "playing");
   const [error, setError] = useState("");
@@ -32,6 +40,8 @@ export default function SummerizeTheEssay({
       try {
         if (a.duration && !isNaN(a.duration)) {
           setProgress((a.currentTime / a.duration) * 100);
+          setElapsed(a.currentTime);
+          setTotalDuration(a.duration);
         }
       } catch {}
     };
@@ -68,6 +78,7 @@ export default function SummerizeTheEssay({
   // If output changes, reset everything
   useEffect(() => {
     setProgress(0);
+    setElapsed(0);
     setPlayedCount(0);
     setError("");
 
@@ -151,7 +162,7 @@ export default function SummerizeTheEssay({
       <div className="space-y-2">
         <div className="flex items-center justify-between text-sm">
           <div className="font-medium">Playback progress</div>
-          <div className="text-xs text-gray-600">{Math.round(progress)}%</div>
+          <div className="text-xs text-gray-600">{formatTime(elapsed)} / {formatTime(totalDuration)}</div>
         </div>
         <Progress value={Math.round(progress)} />
       </div>

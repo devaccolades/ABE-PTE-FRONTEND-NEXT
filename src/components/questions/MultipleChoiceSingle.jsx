@@ -65,8 +65,8 @@ export default function MultipleChoiceSingle({
       {/* Header with Global Timer Display */}
       <div className="flex justify-between items-center border-b pb-4">
         <h2 className="text-xl font-bold text-gray-800 uppercase">
-          {subsection || name}
-        </h2>
+            {name}
+          </h2>
         <SectionTimerDisplay
           formattedTime={formattedTime}
           isExpired={isExpired}
