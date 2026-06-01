@@ -19,7 +19,9 @@ import PremiumPrepCountdown from "../ui/PremiumPrepCountdown";
  * - Instant Playback for Review
  * - "Try Again" functionality
  */
-export default function MicCheck({ onFinished }) {
+export default function MicCheck({
+  name = "",
+  onFinished }) {
   const [stage, setStage] = useState("IDLE"); // IDLE, PREP, RECORDING, REVIEW
   const [prepLeft, setPrepLeft] = useState(5);
   const [recLeft, setRecLeft] = useState(10);

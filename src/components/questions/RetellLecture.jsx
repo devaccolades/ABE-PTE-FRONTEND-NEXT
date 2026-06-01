@@ -12,6 +12,7 @@ import { useSectionTimer } from "../hooks/useSectionTimer";
 import SectionTimerDisplay from "../ui/SectionTimerDisplay";
 
 export default function RetellLecture({
+  name = "",
   audioUrl,
   videoUrl,
   prepSeconds = 10,
@@ -89,6 +90,7 @@ export default function RetellLecture({
     formatTime,
     pauseMedia,
   } = useMediaPlayback(primaryMediaSrc, handleMediaPlaybackEnd, () => {});
+// Removed formatFraction; using formatTime from useMediaPlayback hook
 
   // --- 4. EFFECTS ---
   useEffect(() => {
@@ -134,8 +136,8 @@ export default function RetellLecture({
     <div className="space-y-6">
       <div className="flex justify-between items-center border-b pb-4">
         <h2 className="text-xl font-bold text-gray-800 uppercase tracking-tight">
-          {subsection?.replace(/_/g, " ")}
-        </h2>
+            {name}
+          </h2>
         <SectionTimerDisplay
           formattedTime={useSectionTimer(stopRecording).formattedTime}
           isExpired={false}
@@ -217,9 +219,7 @@ export default function RetellLecture({
                   ? "Playing Lecture Video"
                   : "Playing Lecture Audio"}
               </span>
-              <span className="tabular-nums">
-                {formatTime(mediaTime.current)} / {formatTime(mediaTime.total)}
-              </span>
+              <div className="text-xs tabular-nums">{formatTime(mediaTime.current)} / {formatTime(mediaTime.total)}</div>
             </div>
             <Progress
               value={Math.round(mediaProgress)}

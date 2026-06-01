@@ -14,6 +14,7 @@ import { useSectionTimer } from "../hooks/useSectionTimer";
 import SectionTimerDisplay from "../ui/SectionTimerDisplay";
 
 export default function AudioToMCQ({
+  name = "",
   audioSrc,
   output,
   prepSeconds = 5,
@@ -34,6 +35,8 @@ export default function AudioToMCQ({
   const [prepLeft, setPrepLeft] = useState(prepSeconds);
   const [progress, setProgress] = useState(0);
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [elapsed, setElapsed] = useState(0); // seconds elapsed
+  const [totalDuration, setTotalDuration] = useState(0); // total seconds
 
   const { formattedTime, isExpired: isSectionExpired } = useSectionTimer();
 
@@ -47,6 +50,8 @@ export default function AudioToMCQ({
     const el = audioRef.current;
     if (el && el.duration) {
       setProgress((el.currentTime / el.duration) * 100);
+      // <-- NEW: keep track of how many seconds have played
+      setElapsed(el.currentTime);
     }
   };
 
@@ -102,6 +107,15 @@ export default function AudioToMCQ({
     }
   }, [selectedIds, isSectionExpired, status, setPhase, setAnswerKey]);
 
+  // --------------------------------------------------------------
+  // Helper: format time (MM:SS)
+  // --------------------------------------------------------------
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
   return (
     <div className="space-y-4 md:space-y-6 max-w-full overflow-hidden">
       {/* HEADER */}
@@ -109,7 +123,7 @@ export default function AudioToMCQ({
         <div className="flex items-center gap-2 text-sky-700">
           <Headphones className="w-5 h-5 shrink-0" />
           <h2 className="text-lg md:text-xl font-bold uppercase tracking-tight truncate">
-            {subsection?.replace(/_/g, " ")}
+            {name}
           </h2>
         </div>
         <SectionTimerDisplay
@@ -152,7 +166,8 @@ export default function AudioToMCQ({
                 <span className="flex items-center gap-2">
                   <Volume2 className="h-4 w-4 animate-pulse" /> Audio Playing
                 </span>
-                <span>{Math.round(progress)}%</span>
+                {/* Updated: show elapsed time instead of % */}
+                <span>{formatTime(elapsed)} / {formatTime(totalDuration)}</span>
               </div>
               <Progress value={progress} className="h-2 bg-sky-50" />
             </div>
@@ -172,7 +187,15 @@ export default function AudioToMCQ({
           ref={audioRef}
           src={mainSrc}
           onCanPlayThrough={handleCanPlay}
-          onTimeUpdate={handleTimeUpdate}
+          onTimeUpdate={() => {
+              if (audioRef.current) {
+                const current = audioRef.current.currentTime;
+                const total = audioRef.current.duration || 0;
+                setProgress((current / total) * 100);
+                setElapsed(current);
+                setTotalDuration(total);
+              }
+            }}
           onEnded={handleAudioEnd}
           onPlay={pauseAllOptionAudios}
           className="hidden"
@@ -201,11 +224,7 @@ export default function AudioToMCQ({
             <label
               key={opt.id}
               className={`group flex items-start gap-4 rounded-xl border-2 p-4 md:p-5 cursor-pointer transition-all
-                ${
-                  isChecked
-                    ? "border-sky-500 bg-sky-50"
-                    : "border-gray-100 bg-white hover:border-sky-100"
-                }`}
+                ${isChecked ? "border-sky-500 bg-sky-50" : "border-gray-100 bg-white hover:border-sky-100"}`}
             >
               <div className="pt-0.5">
                 <input
@@ -216,7 +235,9 @@ export default function AudioToMCQ({
                 />
               </div>
               <p
-                className={`text-sm md:text-base ${isChecked ? "text-sky-900 font-semibold" : "text-gray-700 font-medium"}`}
+                className={`text-sm md:text-base ${
+                  isChecked ? "text-sky-900 font-semibold" : "text-gray-700 font-medium"
+                }`}
               >
                 {opt.option_text}
               </p>

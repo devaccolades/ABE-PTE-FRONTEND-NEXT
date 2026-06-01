@@ -11,6 +11,7 @@ import RecordingStatusDisplay from "../hooks/RecordingStatusDisplay";
 import SectionTimerDisplay from "../ui/SectionTimerDisplay";
 
 export default function DescribeImage({
+  name = "",
   imageUrl,
   prepSeconds = 25,
   recordSeconds = 40,
@@ -101,7 +102,7 @@ export default function DescribeImage({
         <div className="flex items-center gap-2">
           <ImageIcon className="w-5 h-5 text-sky-600 shrink-0" />
           <h2 className="text-lg md:text-xl font-bold text-gray-800 uppercase tracking-tight truncate">
-            {subsection}
+            {name}
           </h2>
         </div>
         <SectionTimerDisplay

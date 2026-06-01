@@ -118,7 +118,7 @@ export default function ReadAloud({
             <Mic className="w-5 h-5 text-sky-600" />
           </div>
           <h2 className="text-lg md:text-xl font-bold text-gray-800 tracking-tight uppercase truncate">
-            {name || subsection}
+            {name}
           </h2>
         </div>
         <SectionTimerDisplay

@@ -7,6 +7,7 @@ import { useSectionTimer } from "../hooks/useSectionTimer";
 import SectionTimerDisplay from "../ui/SectionTimerDisplay";
 
 export default function AudioHighlightBox({
+  name = "",
   audioSrc,
   output,
   text = "",
@@ -22,11 +23,19 @@ export default function AudioHighlightBox({
 
   const [status, setStatus] = useState("LOADING");
   const [prepLeft, setPrepLeft] = useState(prepSeconds);
-  const [progress, setProgress] = useState(0);
+  const [audioProgress, setAudioProgress] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+  const [totalDuration, setTotalDuration] = useState(0);
   const [sourceError, setSourceError] = useState("");
   const [highlighted, setHighlighted] = useState(new Set());
 
   const tokens = useMemo(() => tokenize(text), [text]);
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
 
   const handleCanPlay = useCallback(() => {
     if (status === "LOADING") setStatus("PREP");
@@ -92,7 +101,7 @@ export default function AudioHighlightBox({
         <div className="flex items-center gap-2 text-sky-700">
           <Headphones className="w-5 h-5 shrink-0" />
           <h2 className="text-lg md:text-xl font-bold uppercase tracking-tight truncate">
-            {subsection}
+            {name}
           </h2>
         </div>
         <SectionTimerDisplay formattedTime={formattedTime} isExpired={isSectionExpired} />
@@ -114,9 +123,9 @@ export default function AudioHighlightBox({
               <span className="flex items-center gap-2">
                 <Volume2 className="h-4 w-4 animate-pulse" /> Status: Playing
               </span>
-              <span>{Math.round(progress)}%</span>
+                <span>{formatTime(elapsed)} / {formatTime(totalDuration)}</span>
             </div>
-            <Progress value={progress} className="h-1.5 md:h-2 bg-sky-50" />
+            <Progress value={audioProgress} className="h-1.5 md:h-2 bg-sky-50" />
           </div>
         )}
 
@@ -140,8 +149,13 @@ export default function AudioHighlightBox({
           src={mainSrc}
           onCanPlayThrough={handleCanPlay}
           onTimeUpdate={() => {
-            const el = audioRef.current;
-            if (el && el.duration) setProgress((el.currentTime / el.duration) * 100);
+            if (audioRef.current) {
+              const current = audioRef.current.currentTime;
+              const total = audioRef.current.duration || 0;
+              setAudioProgress((current / total) * 100);
+              setElapsed(current);
+              setTotalDuration(total);
+            }
           }}
           onEnded={() => setStatus("FINISHED")}
           className="hidden"

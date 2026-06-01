@@ -131,8 +131,8 @@ export default function ReorderParagraphs({
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 gap-3">
         <h2 className="text-lg md:text-xl font-bold text-gray-800 uppercase">
-          {subsection?.replace(/_/g, " ") || name}
-        </h2>
+            {name}
+          </h2>
         <div className="flex items-center gap-4">
           {!isExpired && target.length > 0 && (
             <button

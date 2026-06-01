@@ -16,6 +16,7 @@ import SectionTimerDisplay from "../ui/SectionTimerDisplay";
 import IndividualQuestionTimer from "../ui/IndividualQuestionTimer";
 
 export default function SummarizeTheText({
+  name = "",
   audioUrl,
   prepSeconds = 5,
   subsection = "summarize_spoken_text",
@@ -115,7 +116,7 @@ export default function SummarizeTheText({
         <div className="flex items-center gap-2 text-sky-700">
           <Headphones className="w-5 h-5" />
           <h2 className="text-lg md:text-xl font-bold uppercase tracking-tight">
-            {subsection.replace(/_/g, " ")}
+            {name}
           </h2>
         </div>
         <div className="flex flex-col items-end gap-1">

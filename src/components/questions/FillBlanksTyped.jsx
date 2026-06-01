@@ -20,6 +20,7 @@ import { useSectionTimer } from "../hooks/useSectionTimer";
 import SectionTimerDisplay from "../ui/SectionTimerDisplay";
 
 export default function FillBlanksTyped({
+  name = "",
   audioSrc: propAudioSrc,
   output,
   prepSeconds = 5,
@@ -40,7 +41,15 @@ export default function FillBlanksTyped({
   const [prepLeft, setPrepLeft] = useState(prepSeconds);
   const [answerLeft, setAnswerLeft] = useState(durationSeconds);
   const [audioProgress, setAudioProgress] = useState(0);
-  const [isBlocked, setIsBlocked] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [totalDuration, setTotalDuration] = useState(0);
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+  const formatFraction = (elapsed, total) => `${Math.floor(elapsed/60)}/${Math.ceil(total/60)}`;  const [isBlocked, setIsBlocked] = useState(false);
 
   const audioRef = useRef(null);
 
@@ -100,7 +109,7 @@ export default function FillBlanksTyped({
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-3 md:pb-4 gap-3">
         <h2 className="text-lg md:text-xl font-bold text-gray-800 uppercase tracking-tight flex items-center gap-2">
           <Headphones className="w-5 h-5 text-sky-600 shrink-0" />
-          <span className="truncate">{subsection}</span>
+          <span className="truncate">{name}</span>
         </h2>
         <SectionTimerDisplay
           formattedTime={formattedTime}
@@ -137,7 +146,7 @@ export default function FillBlanksTyped({
               <span className="flex items-center gap-2">
                 <Volume2 className="w-3 h-3 md:w-4 md:h-4" /> Listening
               </span>
-              <span>{Math.round(audioProgress)}%</span>
+                <span>{formatTime(elapsed)} / {formatTime(totalDuration)}</span>
             </div>
             <Progress value={audioProgress} className="h-1.5 bg-sky-50" />
           </div>
@@ -158,10 +167,11 @@ export default function FillBlanksTyped({
           onCanPlayThrough={handleCanPlay}
           onTimeUpdate={() => {
             if (audioRef.current) {
-              setAudioProgress(
-                (audioRef.current.currentTime / audioRef.current.duration) *
-                  100,
-              );
+              const current = audioRef.current.currentTime;
+              const total = audioRef.current.duration || 0;
+              setAudioProgress((current / total) * 100);
+              setElapsed(current);
+              setTotalDuration(total);
             }
           }}
           onEnded={handleAudioEnd}
