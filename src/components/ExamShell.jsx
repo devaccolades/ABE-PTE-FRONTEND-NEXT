@@ -383,6 +383,14 @@ export default function ExamShell({ mocktestList }) {
   const handleModalNext = async () => {
     // Guard: do not allow concurrent submissions (manual click + timer expiry or double clicks).
     if (isSubmittingRef.current) return;
+    
+    const finalAnswer = useExamStore.getState().answer;
+    // Guard: Prevent double-submission of an empty/reset answer payload
+    if (!finalAnswer || !finalAnswer.question_name) {
+      console.log("handleModalNext blocked: empty question_name. Likely double-trigger.");
+      return;
+    }
+
     isSubmittingRef.current = true;
 
     setCallAreYouSure(false);
@@ -395,8 +403,6 @@ export default function ExamShell({ mocktestList }) {
       setLoading(true);
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
-
-    const finalAnswer = useExamStore.getState().answer;
 
     const formData = new FormData();
     formData.append("session_id", sessionId);
@@ -471,7 +477,7 @@ export default function ExamShell({ mocktestList }) {
       }
 
       if (nextQuestionUrl) {
-        loadQuestion(nextQuestionUrl);
+        await loadQuestion(nextQuestionUrl);
       } else {
         setLoading(false);
         setCurrentQuestion(null);
