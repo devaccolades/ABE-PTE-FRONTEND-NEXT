@@ -35,17 +35,14 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-
       const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
-
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) {
           chunksRef.current.push(e.data);
         }
       };
-
       recorder.onstop = () => {
         // Create the Blob from chunks gathered so far
         if (chunksRef.current.length > 0) {
@@ -54,18 +51,23 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
         } else {
           console.error("No audio chunks found at stop.");
         }
-
         // Cleanup tracks
         if (streamRef.current) {
           streamRef.current.getTracks().forEach((track) => track.stop());
           streamRef.current = null;
         }
       };
-
+      // ---> BEEP LOGIC ADDED HERE <---
+      try {
+        const beep = new Audio("/beep.mpeg"); // Change to match your file name in the public folder
+        beep.play();
+      } catch (err) {
+        console.error("Failed to play beep:", err);
+      }
+      // -------------------------------
       // CRITICAL CHANGE: Pass 1000ms to collect data every second
       // This makes short recordings much more reliable
       recorder.start(1000);
-
       return true;
     } catch (err) {
       console.error("Mic access error:", err);
