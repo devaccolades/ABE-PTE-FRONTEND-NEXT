@@ -59,7 +59,7 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
       };
       // ---> BEEP LOGIC ADDED HERE <---
       try {
-        const beep = new Audio("/beep.mpeg"); // Change to match your file name in the public folder
+        const beep = new Audio("/beep.mp3"); // Change to match your file name in the public folder
         beep.play();
       } catch (err) {
         console.error("Failed to play beep:", err);
