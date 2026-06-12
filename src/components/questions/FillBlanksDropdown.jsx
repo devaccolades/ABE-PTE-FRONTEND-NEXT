@@ -54,23 +54,35 @@ export default function FillBlanksDropdown({
         text-gray-900
       `}
       >
-        {segments.map((seg, index) => (
-          <span key={index} className="inline">
-            <span className="whitespace-pre-wrap">{seg.text_before_blank}</span>
+        {segments.map((seg, index) => {
+          const nextSeg = segments[index + 1];
+          const needsSpaceAfterBlank =
+            seg.text_after_blank &&
+            nextSeg?.text_before_blank &&
+            !/\s$/.test(seg.text_after_blank) &&
+            !/^\s/.test(nextSeg.text_before_blank);
 
-            {seg.blank_number && (
-              <SelectBlank
-                blankNumber={seg.blank_number}
-                options={seg.options}
-                value={answers[seg.blank_number] || ""}
-                onChange={handleChange}
-                disabled={isSectionExpired}
-              />
-            )}
+          return (
+            <span key={index} className="inline">
+              <span className="whitespace-pre-wrap">{seg.text_before_blank}</span>
 
-            <span className="whitespace-pre-wrap">{seg.text_after_blank}</span>
-          </span>
-        ))}
+              {seg.blank_number && (
+                <SelectBlank
+                  blankNumber={seg.blank_number}
+                  options={seg.options}
+                  value={answers[seg.blank_number] || ""}
+                  onChange={handleChange}
+                  disabled={isSectionExpired}
+                />
+              )}
+
+              <span className="whitespace-pre-wrap">
+                {seg.text_after_blank}
+                {needsSpaceAfterBlank ? " " : ""}
+              </span>
+            </span>
+          );
+        })}
       </div>
 
       {/* Dynamic Instruction Label */}
