@@ -1,23 +1,25 @@
-import React from "react";
+"use client";
+
+import { useState } from "react";
+import Header from "@/components/Header";
 import TopSection from "./mockComponent/TopSection";
 import SideBar from "./mockComponent/SideBar";
 import ExamComponent from "./mockComponent/ExamComponent";
 
-// Primary responsibility: Renders the mock-test experience shell (top navigation, sidebar, and question area).
-// Architecture role: Dedicated route for running individual question practice outside the full exam flow.
+export default function Page() {
+  const [active, setActive] = useState(false);
 
-/**
- * @description Mock test route entry component. Composes the mock-test UI primitives.
- * @returns {JSX.Element} Mock-test page layout.
- */
-const page = () => {
   return (
-    <div>
-      <TopSection />
+    <>
+      <Header
+        variant="mock-test"
+        onSelectQuestions={() => setActive((prev) => !prev)}
+      >
+        {active && <TopSection onClose={() => setActive(false)} />}
+      </Header>
+
       <SideBar />
       <ExamComponent />
-    </div>
+    </>
   );
-};
-
-export default page;
+}

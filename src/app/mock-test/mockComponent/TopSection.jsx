@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { mocktestStore } from "../mocktestStore";
+import Link from "next/link";
 
 // Primary responsibility: Provides the mock-test category picker UI (Speaking/Writing/Reading/Listening).
 // Architecture role: Writes category selection into the mock-test store and opens the sidebar to choose a question.
@@ -11,8 +12,7 @@ import { mocktestStore } from "../mocktestStore";
  *
  * @returns {JSX.Element} Top section UI for category selection.
  */
-const TopSection = () => {
-  const [active, setActive] = useState(false);
+const TopSection = ({ onClose }) => {
   const setCurrentQuestion = mocktestStore((state) => state.setCurrentQuestion);
   const setIsSideOpen = mocktestStore((state) => state.setIsSideOpen);
   const setCurrentQuestionName = mocktestStore(
@@ -65,24 +65,13 @@ const TopSection = () => {
     setIsSideOpen(true);
     setCurrentQuestionName(title);
     setIsMockTest(true);
+    if (onClose) onClose();
   };
 
   return (
-    <div
-      className={`bg-[#f0fcff] absolute top-0 z-50  w-full transition-h duration-300 ease-in-out overflow-hidden p-5  ${active ? "h-full" : "h-[10vh]"}`}
-      onClick={() => setActive(!active)}
-    >
-      {" "}
-      <div className="w-[80%] mx-auto ">
-        <div className="flex justify-between items-center h-[8vh] gap-1">
-          <h1 className="text-[#0084d1] text-2xl md:text-3xl font-bold py-5">
-            Mock Test
-          </h1>
-          <button className="bg-[#0084d1] py-2 px-4 text-white rounded-xl  w-fit h-fit cursor-pointer">
-            Select Questions
-          </button>
-        </div>
-        <div className="flex flex-wrap space-y-4 space-x-4 justify-between items-start mt-4">
+    <div className="absolute top-full left-0 w-full bg-[#f0fcff] shadow-lg border-t border-slate-200 z-50 p-6 overflow-hidden">
+      <div className="w-[80%] max-w-6xl mx-auto">
+        <div className="flex flex-wrap gap-8 justify-between items-start">
           <div>
             <h2 className="text-xl font-semibold text-[#018dde] mb-1">
               Speaking

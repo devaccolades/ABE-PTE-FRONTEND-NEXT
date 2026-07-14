@@ -1,5 +1,6 @@
 import ExamShell from "@/components/ExamShell";
 import { MOCKTEST_BASE_URL } from "@/store";
+import Header from "@/components/Header";
 
 // Primary responsibility: Server entry route that fetches mock test data and renders the exam shell.
 // Architecture role: Bridges initial server-side data fetching to the client-side exam runtime.
@@ -14,6 +15,9 @@ export default async function Home() {
 
   return (
     <main className="min-h-dvh bg-gradient-to-b from-sky-50 to-white text-gray-900">
+        {/* Application Header */}
+        <Header variant="home" />
+
       <div className="container mx-auto max-w-4xl p-6 min-h-dvh flex items-center justify-center ">
         <ExamShell mocktestList={mocktestList} />
       </div>
