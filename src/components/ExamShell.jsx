@@ -80,6 +80,7 @@ export default function ExamShell({ mocktestList }) {
   const [callAreYouSure, setCallAreYouSure] = useState(false);
   const [rehydrated, setRehydrated] = useState(false);
   const [displayName, setDisplayName] = useState("");
+  const [examCompleted, setExamCompleted] = useState(false);
 
   const { startExam, setStartExam } = useExamStore();
 
@@ -99,12 +100,60 @@ export default function ExamShell({ mocktestList }) {
       "exam_remaining_time",
       "exam_remaining_time_section",
       "exam_heartbeat",
+      "exam_completed",
+      "exam_completed_at",
       "startExam",
       // keep section_time_left for old timer logic too
       "section_time_left",
     ];
     keysToClear.forEach((k) => localStorage.removeItem(k));
   }, []);
+
+  const persistCompletedExam = useCallback((completedAt = null) => {
+    localStorage.setItem("exam_completed", "true");
+    if (completedAt) {
+      localStorage.setItem("exam_completed_at", completedAt);
+    }
+    [
+      "current_question",
+      "next_question",
+      "exam_remaining_time",
+      "exam_remaining_time_section",
+      "section_time_left",
+    ].forEach((key) => localStorage.removeItem(key));
+    setExamCompleted(true);
+    setCurrentQuestion(null);
+    setLoading(false);
+  }, []);
+
+  const completeSession = useCallback(async () => {
+    let lastError = null;
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const response = await fetch(`${baseUrl}complete-session/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId }),
+        });
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok || !payload.is_completed) {
+          throw new Error(payload.error || "Could not complete the exam session.");
+        }
+
+        persistCompletedExam(payload.completed_at);
+        return payload;
+      } catch (error) {
+        lastError = error;
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+        }
+      }
+    }
+
+    throw lastError || new Error("Could not complete the exam session.");
+  }, [baseUrl, sessionId, persistCompletedExam]);
 
   // Heartbeat: helps distinguish "refresh" vs "tab closed then revisit"
   useEffect(() => {
@@ -178,6 +227,10 @@ export default function ExamShell({ mocktestList }) {
 
     // Backend may need time to calculate the next question after a forced section jump.
     // We poll briefly to avoid advancing to a null/undefined URL.
+    if (data.is_completed) {
+      return null;
+    }
+
     if (!data.next) {
       await new Promise((r) => setTimeout(r, 500));
       return sectionJump(attempts + 1);
@@ -213,8 +266,7 @@ export default function ExamShell({ mocktestList }) {
         const res = await fetch(targetUrl);
         if (!res.ok) {
           if (res.status === 404) {
-            // Assume 404 on fetching question means exam is over
-            setCurrentQuestion(null);
+            await completeSession();
             return;
           }
           throw new Error("Failed to fetch question");
@@ -223,7 +275,7 @@ export default function ExamShell({ mocktestList }) {
 
         const q = data?.results?.[0];
         if (!q) {
-          setCurrentQuestion(null);
+          await completeSession();
           return;
         }
 
@@ -330,6 +382,7 @@ export default function ExamShell({ mocktestList }) {
       setRemainingTime,
       questionSection,
       setPhase,
+      completeSession,
     ],
   );
 
@@ -337,8 +390,13 @@ export default function ExamShell({ mocktestList }) {
     // Rehydration: restore the session id and display name from localStorage for refresh survival.
     const storedSession = localStorage.getItem("exam_session_id");
     const storedName = localStorage.getItem("exam_user_name");
+    const storedCompleted = localStorage.getItem("exam_completed") === "true";
     if (storedSession && !sessionId) setSessionId(storedSession);
     if (storedName) setDisplayName(storedName);
+    if (storedCompleted) {
+      setExamCompleted(true);
+      setLoading(false);
+    }
 
     // Hydrate remaining time from persisted value (refresh survival)
     const persistedTimeRaw = localStorage.getItem("exam_remaining_time");
@@ -353,12 +411,12 @@ export default function ExamShell({ mocktestList }) {
 
   useEffect(() => {
     // Only attempt to load questions after store state has been rehydrated and we have a session id available.
-    if (!rehydrated || !sessionId) return;
+    if (!rehydrated || !sessionId || examCompleted) return;
     const resumeUrl = localStorage.getItem("current_question");
     loadQuestion(
       resumeUrl || `${baseUrl}get-question/?session_id=${sessionId}`,
     );
-  }, [rehydrated, sessionId, baseUrl, loadQuestion]);
+  }, [rehydrated, sessionId, baseUrl, loadQuestion, examCompleted]);
 
   // Persist remainingTime whenever it updates (separate from 10-min local timers)
   useEffect(() => {
@@ -384,9 +442,9 @@ export default function ExamShell({ mocktestList }) {
     // Guard: do not allow concurrent submissions (manual click + timer expiry or double clicks).
     if (isSubmittingRef.current) return;
     
-    const finalAnswer = useExamStore.getState().answer;
+    const initialAnswer = useExamStore.getState().answer;
     // Guard: Prevent double-submission of an empty/reset answer payload
-    if (!finalAnswer || !finalAnswer.question_name) {
+    if (!initialAnswer || !initialAnswer.question_name) {
       console.log("handleModalNext blocked: empty question_name. Likely double-trigger.");
       return;
     }
@@ -401,8 +459,35 @@ export default function ExamShell({ mocktestList }) {
       // When leaving a recording/prep phase, broadcast a stop signal so the active question component can finalize.
       setStopSignal(true);
       setLoading(true);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
+
+    if (currentQuestion?.ai_input_type === "audio") {
+      const capturePromise = useExamStore.getState().audioCapturePromise;
+      let audioBlob = null;
+
+      try {
+        audioBlob = await Promise.race([
+          capturePromise || Promise.resolve(null),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Audio finalization timed out.")), 5000),
+          ),
+        ]);
+      } catch (error) {
+        console.error("Audio finalization failed:", error);
+      }
+
+      if (!(audioBlob instanceof Blob) || audioBlob.size === 0) {
+        setLoading(false);
+        setStopSignal(false);
+        isSubmittingRef.current = false;
+        window.alert(
+          "Your recording could not be saved. Please check microphone access and record this answer again.",
+        );
+        return;
+      }
+    }
+
+    const finalAnswer = useExamStore.getState().answer;
 
     const formData = new FormData();
     formData.append("session_id", sessionId);
@@ -449,7 +534,11 @@ export default function ExamShell({ mocktestList }) {
         body: formData,
       });
 
-      if (!postRes.ok) throw new Error("Submission Failed");
+      if (!postRes.ok) {
+        const payload = await postRes.json().catch(() => ({}));
+        throw new Error(payload.error || "Submission failed");
+      }
+      const submission = await postRes.json();
 
       setStopSignal(false);
       resetAnswer();
@@ -466,8 +555,7 @@ export default function ExamShell({ mocktestList }) {
         if (jumpedNextUrl) {
           await loadQuestion(jumpedNextUrl);
         } else {
-          setLoading(false);
-          setCurrentQuestion(null);
+          await completeSession();
         }
 
         // Reset the expiry flag after handling so we don't repeatedly auto-advance on subsequent renders.
@@ -479,11 +567,15 @@ export default function ExamShell({ mocktestList }) {
       if (nextQuestionUrl) {
         await loadQuestion(nextQuestionUrl);
       } else {
-        setLoading(false);
-        setCurrentQuestion(null);
+        if (submission.session?.is_completed) {
+          persistCompletedExam(submission.session.completed_at);
+        } else {
+          await completeSession();
+        }
       }
     } catch (error) {
       console.error("Submission Error:", error);
+      window.alert(error.message || "Submission failed. Please try again.");
       setLoading(false);
       setStopSignal(false);
     } finally {
@@ -513,7 +605,8 @@ export default function ExamShell({ mocktestList }) {
   if (!displayName) return <NameGate mocktestList={mocktestList} />;
   if (loading && !currentQuestion) return <ExamLoadingSkeleton />;
   if (!startExam) return <PreExam />;
-  if (!currentQuestion) return <ExamCompleteScreen userName={userName} />;
+  if (examCompleted) return <ExamCompleteScreen userName={userName} />;
+  if (!currentQuestion) return <ExamLoadingSkeleton />;
 
   return (
     <>

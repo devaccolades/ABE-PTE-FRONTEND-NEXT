@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useCallback } from "react";
+import { useExamStore } from "@/store";
 
 // Primary responsibility: Provides microphone recording helpers and stores the resulting audio Blob in global answer state.
 // Architecture role: Shared hook used by speaking question components to capture audio reliably across short recordings.
@@ -26,6 +27,11 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const chunksRef = useRef([]);
+  const capturePromiseRef = useRef(null);
+  const resolveCaptureRef = useRef(null);
+  const setAudioCapturePromise = useExamStore(
+    (state) => state.setAudioCapturePromise,
+  );
 
   /**
    * @description Requests microphone access and starts collecting audio chunks.
@@ -38,19 +44,26 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
       const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
+      capturePromiseRef.current = new Promise((resolve) => {
+        resolveCaptureRef.current = resolve;
+      });
+      setAudioCapturePromise(capturePromiseRef.current);
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) {
           chunksRef.current.push(e.data);
         }
       };
       recorder.onstop = () => {
-        // Create the Blob from chunks gathered so far
+        let audioBlob = null;
         if (chunksRef.current.length > 0) {
-          const audioBlob = new Blob(chunksRef.current, { type: "audio/webm" });
+          audioBlob = new Blob(chunksRef.current, { type: "audio/webm" });
           setAnswerKey("answer_audio", audioBlob);
         } else {
           console.error("No audio chunks found at stop.");
+          setError("The recording was empty. Please record the answer again.");
         }
+        resolveCaptureRef.current?.(audioBlob);
+        resolveCaptureRef.current = null;
         // Cleanup tracks
         if (streamRef.current) {
           streamRef.current.getTracks().forEach((track) => track.stop());
@@ -72,9 +85,12 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
     } catch (err) {
       console.error("Mic access error:", err);
       setError("Microphone access denied or not found.");
+      const failedCapture = Promise.resolve(null);
+      capturePromiseRef.current = failedCapture;
+      setAudioCapturePromise(failedCapture);
       return false;
     }
-  }, [setAnswerKey]);
+  }, [setAnswerKey, setAudioCapturePromise]);
 
   /**
    * @description Stops the active recording session (if one is running). Triggers `MediaRecorder.onstop`.
@@ -87,6 +103,7 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
     ) {
       mediaRecorderRef.current.stop();
     }
+    return capturePromiseRef.current || Promise.resolve(null);
   }, []);
 
   /**

@@ -97,8 +97,31 @@ const ExamComponent = () => {
       setStopSignal(true);
       setLoading(true);
 
-      // This pause is the "Safety Buffer" for the Audio Blob to be created
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    if (selectedQuestion?.ai_input_type === "audio") {
+      const capturePromise = useExamStore.getState().audioCapturePromise;
+      let audioBlob = null;
+
+      try {
+        audioBlob = await Promise.race([
+          capturePromise || Promise.resolve(null),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Audio finalization timed out.")), 5000),
+          ),
+        ]);
+      } catch (error) {
+        console.error("Audio finalization failed:", error);
+      }
+
+      if (!(audioBlob instanceof Blob) || audioBlob.size === 0) {
+        setLoading(false);
+        setStopSignal(false);
+        alert(
+          "Your recording could not be saved. Please check microphone access and record this answer again.",
+        );
+        return;
+      }
     }
 
     // 2. Now get the FRESH state (which now includes the blob from step 1)
@@ -149,7 +172,10 @@ const ExamComponent = () => {
         method: "POST",
         body: formData,
       });
-      if (!postRes.ok) throw new Error("Submission Failed");
+      if (!postRes.ok) {
+        const payload = await postRes.json().catch(() => ({}));
+        throw new Error(payload.error || "Submission failed");
+      }
 
       toast.success("Successfully completed the submission try next one!");
 

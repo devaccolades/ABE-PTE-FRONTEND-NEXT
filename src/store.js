@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
-// export const MOCKTEST_BASE_URL = "https://admin.pte.abeedu.com/mocktest/";
-export const MOCKTEST_BASE_URL = "https://admin.abepte.accoladesweb.com/mocktest/";
+export const MOCKTEST_BASE_URL = "https://admin.pte.abeedu.com/mocktest/";
+// export const MOCKTEST_BASE_URL = "https://admin.abepte.accoladesweb.com/mocktest/";
 // export const MOCKTEST_BASE_URL = "http://192.168.29.96:8000/mocktest/";
 
 // Primary responsibility: Defines the global exam store (Zustand) and shared client-side API stubs.
@@ -72,6 +72,8 @@ export const useExamStore = create((set, get) => ({
     answer: {},
     answer_audio: null,
   },
+  // Resolves only after MediaRecorder.onstop has assembled the final Blob.
+  audioCapturePromise: null,
   // "phase" describes where the candidate is within the current question interaction (prep/record/typing/etc.).
   phase: "prep",
   isStopSignalSent: false, // <-- NEW STATE VARIABLE
@@ -108,6 +110,7 @@ export const useExamStore = create((set, get) => ({
         [key]: value, // Updates top-level: session_id, answer_audio, question_name
       },
     })),
+  setAudioCapturePromise: (promise) => set({ audioCapturePromise: promise }),
 
   /**
    * @description Updates a nested entry inside `answer.answer` for multi-input questions (e.g., blanks, MCQs).
@@ -139,6 +142,7 @@ export const useExamStore = create((set, get) => ({
         answer: {},
         answer_audio: "",
       },
+      audioCapturePromise: null,
     })),
   /**
    * @description Sets the current section name (used for displaying and persisting section-level timer state).
