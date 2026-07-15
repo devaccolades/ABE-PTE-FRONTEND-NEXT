@@ -96,6 +96,7 @@ export default function ExamShell({ mocktestList }) {
 
   // Submission lock: prevents duplicate submissions caused by double-clicks, fast re-renders, or timer-triggered auto-submit.
   const isSubmittingRef = useRef(false);
+  const handleModalNextRef = useRef(null);
 
   /**
    * @description Clears all exam-related localStorage keys used for refresh survival and session resume.
@@ -160,11 +161,20 @@ export default function ExamShell({ mocktestList }) {
         });
         const payload = await response.json().catch(() => ({}));
 
-        if (!response.ok || !payload.is_completed) {
+        const completedSession = payload.session || payload;
+        const isCompleted = Boolean(
+          payload.is_completed ?? completedSession?.is_completed,
+        );
+
+        if (!response.ok || !isCompleted) {
+          console.error("Complete session failed:", {
+            status: response.status,
+            payload,
+          });
           throw new Error(payload.error || "Could not complete the exam session.");
         }
 
-        persistCompletedExam(payload.completed_at);
+        persistCompletedExam(completedSession.completed_at || payload.completed_at);
         return payload;
       } catch (error) {
         lastError = error;
@@ -606,23 +616,27 @@ export default function ExamShell({ mocktestList }) {
     }
   };
 
+  useEffect(() => {
+    handleModalNextRef.current = handleModalNext;
+  });
+
   // Auto‑advance when a speaking/recording question finishes (global phase === "finished")
   useEffect(() => {
     if (phase === "finished" && !isSubmittingRef.current) {
-      handleModalNext();
+      handleModalNextRef.current?.();
     }
-  }, [phase, handleModalNext]);
+  }, [phase]);
 
   useEffect(() => {
     // Auto-advance when the section timer expires. Using a timeout avoids calling submission logic during render.
     if (!isTimeExpired) return;
 
     const id = setTimeout(() => {
-      handleModalNext();
+      handleModalNextRef.current?.();
     }, 0);
 
     return () => clearTimeout(id);
-  }, [isTimeExpired, handleModalNext]);
+  }, [isTimeExpired]);
 
   if (!displayName) return <NameGate mocktestList={mocktestList} />;
   if (loading && !currentQuestion) return <ExamLoadingSkeleton />;
@@ -663,7 +677,7 @@ export default function ExamShell({ mocktestList }) {
           </div>
 
           {/* Footer: Full-width button on mobile for better thumb reach */}
-          <div className="mt-6 md:mt-10 pt-4 border-t flex justify-end">
+          <div className="mt-6 md:mt-8 pt-4 border-t flex justify-end">
             <button
               disabled={phase === "prep"}
               onClick={() => setCallAreYouSure(true)}
