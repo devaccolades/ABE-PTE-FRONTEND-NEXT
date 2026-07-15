@@ -129,7 +129,7 @@ export default function ReadAloud({
 
       {/* PROMPT AREA */}
       <div className="rounded-xl border border-gray-200 p-5 md:p-8 bg-white shadow-sm ring-1 ring-gray-900/5 transition-all">
-        <p className="text-lg md:text-xl leading-relaxed md:leading-loose text-gray-800 font-medium selection:bg-sky-100">
+        <p className="text-lg md:text-xl leading-[160%] text-gray-800 font-medium selection:bg-sky-100">
           {promptText}
         </p>
       </div>

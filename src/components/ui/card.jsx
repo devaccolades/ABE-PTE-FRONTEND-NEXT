@@ -4,7 +4,7 @@ export function Card({ className = "", ...props }) {
   return (
     <div 
       className={`rounded-none sm:rounded-xl border-y sm:border border-gray-200 bg-white shadow-sm ${className}`} 
-      {...props} 
+      {...props}
     />
   );
 }
@@ -12,8 +12,8 @@ export function Card({ className = "", ...props }) {
 export function CardHeader({ className = "", ...props }) {
   return (
     <div 
-      className={`border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${className}`} 
-      {...props} 
+      className={`border-b border-gray-100 p-4 md:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${className}`} 
+      {...props}
     />
   );
 }

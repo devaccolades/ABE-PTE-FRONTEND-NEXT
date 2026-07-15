@@ -18,7 +18,7 @@ export default async function Home() {
         {/* Application Header */}
         <Header variant="home" />
 
-      <div className="container mx-auto max-w-4xl p-6 min-h-dvh flex items-center justify-center ">
+      <div className="container mx-auto max-w-4xl py-6 min-h-dvh flex items-center justify-center ">
         <ExamShell mocktestList={mocktestList} />
       </div>
     </main>
