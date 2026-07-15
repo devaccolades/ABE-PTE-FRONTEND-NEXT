@@ -12,7 +12,7 @@ export function Card({ className = "", ...props }) {
 export function CardHeader({ className = "", ...props }) {
   return (
     <div 
-      className={`p-4 md:p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${className}`} 
+      className={`border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${className}`} 
       {...props} 
     />
   );
