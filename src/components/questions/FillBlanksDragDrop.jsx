@@ -114,8 +114,8 @@ export default function FillBlanksDragDrop({
   };
 
   return (
-    <div className="space-y-4 md:space-y-6 max-w-full">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 gap-3">
+    <div className="space-y-4 md:space-y-5 max-w-full">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-3 gap-3">
         <h2 className="text-lg md:text-xl font-bold text-gray-800 uppercase tracking-tight">
             {name}
           </h2>
@@ -135,7 +135,7 @@ export default function FillBlanksDragDrop({
       )}
 
       {/* TEXT AREA */}
-      <div className="rounded-xl border border-gray-200 p-4 md:p-8 bg-white text-gray-900 text-base md:text-lg leading-[3rem] md:leading-[4rem] shadow-sm">
+      <div className="rounded-xl border border-gray-200 p-4 md:p-5 bg-white text-gray-900 text-base md:text-[17px] leading-[2rem] md:leading-[3rem] shadow-sm">
         {textParts.map((part, index) => (
           <span key={index} className="inline">
             <span className="whitespace-pre-wrap">{part}</span>
@@ -156,7 +156,7 @@ export default function FillBlanksDragDrop({
 
       {/* OPTIONS POOL */}
       <div
-        className={`p-4 md:p-6 bg-slate-50 rounded-xl border-2 border-dashed transition-colors ${selectedOption ? "border-sky-400 bg-sky-50/50" : "border-slate-200"}`}
+        className={`p-4 md:p-5 bg-slate-50 rounded-xl border-2 border-dashed transition-colors ${selectedOption ? "border-sky-400 bg-sky-50/50" : "border-slate-200"}`}
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDropOnPool}
       >
@@ -213,7 +213,7 @@ function DropTarget({
       }}
       className={`
         mx-1 md:mx-2 inline-flex items-center justify-center align-middle
-        min-w-[100px] md:min-w-[140px] h-8 md:h-10 px-2 md:px-3 rounded md:rounded-md border-2 transition-all
+        min-w-[100px] md:min-w-[140px] h-8 md:h-9 px-2 md:px-3 rounded md:rounded-md border-2 transition-all
         ${
           filledValue
             ? "bg-sky-600 border-sky-600 text-white font-medium shadow-sm"
@@ -243,7 +243,7 @@ function DraggableOption({
       onDragStart={onDragStart}
       onClick={onClick}
       className={`
-        px-3 py-1.5 md:px-5 md:py-2.5 border-2 rounded-lg shadow-sm
+        px-3 py-1.5 md:px-4 md:py-1.5 border-2 rounded-lg shadow-sm
         text-sm md:text-base font-semibold select-none transition-all
         ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-grab active:scale-95"}
         ${
