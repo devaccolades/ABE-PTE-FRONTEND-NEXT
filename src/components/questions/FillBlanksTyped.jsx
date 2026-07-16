@@ -127,7 +127,7 @@ export default function FillBlanksTyped({
       )}
 
       {/* Status Card */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-8 shadow-sm flex flex-col items-center justify-center min-h-[100px] md:min-h-[140px] space-y-4">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-6 shadow-sm flex flex-col items-center justify-center min-h-[100px] space-y-4">
         {status === "PREP" && (
           <div className="w-full max-w-xs md:max-w-sm text-center space-y-3">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -181,7 +181,7 @@ export default function FillBlanksTyped({
       </div>
 
       {/* Main Text Area */}
-      <div className="rounded-2xl md:rounded-3xl border border-gray-100 p-6 md:p-12 bg-white shadow-sm text-base md:text-xl leading-[3.5rem] md:leading-[4.5rem] text-gray-700">
+      <div className="rounded-2xl md:rounded-3xl border border-gray-100 p-6 bg-white shadow-sm text-base md:text-xl leading-[3.5rem] text-gray-700">
         {segments.map((seg, i) => (
           <React.Fragment key={i}>
             <span className="select-none whitespace-pre-wrap">{seg}</span>

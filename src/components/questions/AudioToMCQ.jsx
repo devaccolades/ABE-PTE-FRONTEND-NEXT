@@ -133,7 +133,7 @@ export default function AudioToMCQ({
       </div>
 
       {/* AUDIO PLAYER CARD */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-10 shadow-sm flex flex-col items-center justify-center min-h-[140px] md:min-h-[180px] space-y-4">
+      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm flex flex-col items-center justify-center min-h-[140px] space-y-4">
         {text && <p>{text}</p>}
         {status === "LOADING" && (
           <div className="flex flex-col items-center space-y-3">
@@ -204,7 +204,7 @@ export default function AudioToMCQ({
       </div>
 
       {/* OPTIONS */}
-      <div className="grid gap-3 md:gap-4">
+      <div className="grid gap-3">
         {/* HELP TEXT FOR USER EXPERIENCE */}
         {status !== "FINISHED" && !isSectionExpired && (
           <p className="text-[11px] text-center text-amber-600 font-bold uppercase tracking-wider animate-pulse">
