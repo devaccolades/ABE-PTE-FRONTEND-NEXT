@@ -51,13 +51,11 @@ export function useSectionTimer(onTimeExpired) {
   // --- 2. THE COUNTDOWN ENGINE ---
   useEffect(() => {
     if (isSectionTimerPaused) {
-      // Why this exists: pausing the section timer should not lose progress.
-      // We persist the current ref value back to the global store during pause cleanup.
+      // Keep refresh recovery current without notifying React during cleanup.
       return () => {
-        setGlobalRemainingTime(timeLeftRef.current);
+        localStorage.setItem("section_time_left", String(timeLeftRef.current));
       };
     }
-
     // Interval-driven countdown; stores the latest value in both local state and persistence layers.
     const intervalId = setInterval(() => {
       setTimeLeft((prev) => {
@@ -88,9 +86,9 @@ export function useSectionTimer(onTimeExpired) {
 
     return () => {
       clearInterval(intervalId);
-      // --- 3. SAVE TO GLOBAL STORE ON UNMOUNT ---
-      // This is the "Real World" sync point when switching questions
-      setGlobalRemainingTime(timeLeftRef.current);
+      // Persist only to browser storage during cleanup. Updating Zustand here can
+      // notify ExamShell while React is still rendering the next question.
+      localStorage.setItem("section_time_left", String(timeLeftRef.current));
     };
   }, [setGlobalRemainingTime, setIsTimeExpired, onTimeExpired, isSectionTimerPaused]);
 
