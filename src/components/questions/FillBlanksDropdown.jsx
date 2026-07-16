@@ -50,7 +50,7 @@ export default function FillBlanksDropdown({
         rounded-xl border border-gray-200 bg-white shadow-sm
         p-4 sm:p-6 md:p-8 
         text-base sm:text-lg 
-        leading-[2.5rem] sm:leading-[3rem] md:leading-[3.5rem] 
+        leading-[2.5rem] sm:leading-[3rem]
         text-gray-900
       `}
       >

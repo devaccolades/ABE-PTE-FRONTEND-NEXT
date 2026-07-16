@@ -135,7 +135,7 @@ export default function FillBlanksDragDrop({
       )}
 
       {/* TEXT AREA */}
-      <div className="rounded-xl border border-gray-200 p-4 md:p-8 bg-white text-gray-900 text-base md:text-lg leading-[3rem] md:leading-[4rem] shadow-sm">
+      <div className="rounded-xl border border-gray-200 p-4 md:p-8 bg-white text-gray-900 text-base md:text-lg leading-[3rem] shadow-sm">
         {textParts.map((part, index) => (
           <span key={index} className="inline">
             <span className="whitespace-pre-wrap">{part}</span>

@@ -610,7 +610,7 @@ export default function ExamShell({ mocktestList }) {
 
   return (
     <>
-      <Card className="w-full max-w-6xl mx-auto shadow-lg border-none md:border sm:rounded-xl rounded-none my-8 ">
+      <Card className="w-full max-w-5xl mx-auto shadow-lg border-none md:border sm:rounded-xl rounded-none my-8 ">
         {/* Header: Adjusted padding and text size for mobile */}
         <CardHeader className="bg-slate-50 p-4 md:p-6">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 w-full">

@@ -107,7 +107,7 @@ export default function AudioHighlightBox({
         <SectionTimerDisplay formattedTime={formattedTime} isExpired={isSectionExpired} />
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-5 md:p-8 shadow-sm flex flex-col items-center justify-center min-h-[120px] md:min-h-[140px] space-y-4 transition-all">
+      <div className="bg-white rounded-xl border border-gray-200 p-5 md:p-6 shadow-sm flex flex-col items-center justify-center min-h-[120px] md:min-h-[140px] space-y-4 transition-all">
         {status === "PREP" && (
           <div className="w-full max-w-xs md:max-w-md text-center space-y-3">
             <p className="text-[10px] md:text-sm font-black text-amber-500 uppercase tracking-[0.2em]">
@@ -163,7 +163,7 @@ export default function AudioHighlightBox({
         />
       </div>
 
-      <div className="rounded-2xl md:rounded-3xl border border-gray-100 p-5 md:p-10 bg-white shadow-xl text-gray-800 leading-[2.5rem] md:leading-[3.5rem] text-lg md:text-xl transition-all">
+      <div className="rounded-2xl md:rounded-3xl border border-gray-100 p-5 md:p-6 bg-white shadow-xl text-gray-800 leading-[2.5rem] text-lg md:text-xl transition-all">
         {tokens.map((t, idx) => {
           if (!t.isWord) {
             return <span key={idx} className="select-none">{t.value}</span>;
