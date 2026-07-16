@@ -56,7 +56,7 @@ export default function PTESectionNotification() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto my-12 animate-in fade-in zoom-in duration-500">
+    <div className="max-w-3xl mx-auto my-4 animate-in fade-in zoom-in duration-500">
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
         {/* Top Header Banner */}
         <div className="bg-sky-600 p-5 text-white">

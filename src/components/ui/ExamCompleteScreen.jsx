@@ -15,7 +15,7 @@ import { Card } from "@/components/ui/card";
 export default function ExamCompleteScreen({
   examTitle = "PTE Academic Practice Test",
   score = null,
-  timeSpent = "01:20:00",
+  timeSpent = "--:--:--",
   // Updated default handler to clear storage
   onReset = () => {
     localStorage.clear(); 

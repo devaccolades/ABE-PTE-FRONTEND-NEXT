@@ -81,11 +81,22 @@ export default function ExamShell({ mocktestList }) {
   const [rehydrated, setRehydrated] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [examCompleted, setExamCompleted] = useState(false);
+  const [timeSpent, setTimeSpent] = useState("00:00:00");
 
   const { startExam, setStartExam } = useExamStore();
 
+  // Record exam start time in localStorage the first time startExam flips to true.
+  useEffect(() => {
+    if (startExam) {
+      if (!localStorage.getItem("exam_start_time")) {
+        localStorage.setItem("exam_start_time", String(Date.now()));
+      }
+    }
+  }, [startExam]);
+
   // Submission lock: prevents duplicate submissions caused by double-clicks, fast re-renders, or timer-triggered auto-submit.
   const isSubmittingRef = useRef(false);
+  const handleModalNextRef = useRef(null);
 
   /**
    * @description Clears all exam-related localStorage keys used for refresh survival and session resume.
@@ -102,6 +113,7 @@ export default function ExamShell({ mocktestList }) {
       "exam_heartbeat",
       "exam_completed",
       "exam_completed_at",
+      "exam_start_time",
       "startExam",
       // keep section_time_left for old timer logic too
       "section_time_left",
@@ -121,6 +133,17 @@ export default function ExamShell({ mocktestList }) {
       "exam_remaining_time_section",
       "section_time_left",
     ].forEach((key) => localStorage.removeItem(key));
+
+    // Compute actual time spent from the stored start timestamp.
+    const startTime = parseInt(localStorage.getItem("exam_start_time") || "0", 10);
+    if (startTime > 0) {
+      const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+      const hh = String(Math.floor(elapsedSeconds / 3600)).padStart(2, "0");
+      const mm = String(Math.floor((elapsedSeconds % 3600) / 60)).padStart(2, "0");
+      const ss = String(elapsedSeconds % 60).padStart(2, "0");
+      setTimeSpent(`${hh}:${mm}:${ss}`);
+    }
+
     setExamCompleted(true);
     setCurrentQuestion(null);
     setLoading(false);
@@ -138,11 +161,20 @@ export default function ExamShell({ mocktestList }) {
         });
         const payload = await response.json().catch(() => ({}));
 
-        if (!response.ok || !payload.is_completed) {
+        const completedSession = payload.session || payload;
+        const isCompleted = Boolean(
+          payload.is_completed ?? completedSession?.is_completed,
+        );
+
+        if (!response.ok || !isCompleted) {
+          console.error("Complete session failed:", {
+            status: response.status,
+            payload,
+          });
           throw new Error(payload.error || "Could not complete the exam session.");
         }
 
-        persistCompletedExam(payload.completed_at);
+        persistCompletedExam(completedSession.completed_at || payload.completed_at);
         return payload;
       } catch (error) {
         lastError = error;
@@ -584,35 +616,39 @@ export default function ExamShell({ mocktestList }) {
     }
   };
 
+  useEffect(() => {
+    handleModalNextRef.current = handleModalNext;
+  });
+
   // Auto‑advance when a speaking/recording question finishes (global phase === "finished")
   useEffect(() => {
     if (phase === "finished" && !isSubmittingRef.current) {
-      handleModalNext();
+      handleModalNextRef.current?.();
     }
-  }, [phase, handleModalNext]);
+  }, [phase]);
 
   useEffect(() => {
     // Auto-advance when the section timer expires. Using a timeout avoids calling submission logic during render.
     if (!isTimeExpired) return;
 
     const id = setTimeout(() => {
-      handleModalNext();
+      handleModalNextRef.current?.();
     }, 0);
 
     return () => clearTimeout(id);
-  }, [isTimeExpired, handleModalNext]);
+  }, [isTimeExpired]);
 
   if (!displayName) return <NameGate mocktestList={mocktestList} />;
   if (loading && !currentQuestion) return <ExamLoadingSkeleton />;
   if (!startExam) return <PreExam />;
-  if (examCompleted) return <ExamCompleteScreen userName={userName} />;
+  if (examCompleted) return <ExamCompleteScreen userName={userName} timeSpent={timeSpent} />;
   if (!currentQuestion) return <ExamLoadingSkeleton />;
 
   return (
     <>
       <Card className="w-full max-w-6xl mx-auto shadow-lg border-none md:border sm:rounded-xl rounded-none my-8 ">
         {/* Header: Adjusted padding and text size for mobile */}
-        <CardHeader className="bg-slate-50 p-4 md:p-6">
+        <CardHeader className="bg-slate-50 p-4 md:p-5">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 w-full">
             <CardTitle className="text-sky-800 text-lg md:text-xl">
               {titleFor(currentQuestion)}
@@ -624,12 +660,12 @@ export default function ExamShell({ mocktestList }) {
           </div>
         </CardHeader>
 
-        <CardContent className="p-4 md:p-8">
+        <CardContent className="p-4 md:p-6">
           {/* Instruction: Responsive font size and margin */}
           <h2 className="font-bold text-base md:text-lg mb-3 md:mb-4 leading-tight">
             {currentQuestion.subsection_instruction}
           </h2>
-          <Separator className="mb-4 md:mb-6" />
+          <Separator className="mb-4 md:mb-5" />
 
           {/* Question Container: Flexible height */}
           <div className="min-h-[200px] md:min-h-[250px]">

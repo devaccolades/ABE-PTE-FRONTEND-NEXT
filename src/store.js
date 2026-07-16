@@ -161,7 +161,10 @@ export const useExamStore = create((set, get) => ({
    * @param {number} time - Remaining seconds.
    * @returns {void}
    */
-  setRemainingTime: (time) => set({ remainingTime: time }),
+  setRemainingTime: (time) =>
+    set((state) =>
+      state.remainingTime === time ? state : { remainingTime: time },
+    ),
   /**
    * @description Pauses or resumes the section timer decrement logic.
    * @param {boolean} value - True to pause; false to resume.
