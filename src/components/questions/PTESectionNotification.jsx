@@ -59,25 +59,25 @@ export default function PTESectionNotification() {
     <div className="max-w-3xl mx-auto my-12 animate-in fade-in zoom-in duration-500">
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
         {/* Top Header Banner */}
-        <div className="bg-sky-600 p-6 text-white">
-          <div className="flex items-center gap-3 mb-1">
-            <ShieldCheck className="w-6 h-6 text-sky-200" />
+        <div className="bg-sky-600 p-5 text-white">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5 text-sky-200" />
             <span className="text-xs font-bold uppercase tracking-[0.2em] text-sky-100">
               Official Briefing
             </span>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="text-2xl font-bold tracking-tight">
             PTE Academic Exam Structure
           </h1>
-          <p className="mt-1 text-sky-50 text-sm leading-relaxed max-w-xl">
+          <p className="mt-1 text-sky-50 text-sm leading-[120%] max-w-xl">
             You are about to start the full examination. Once the exam starts,
             the global section timer will begin immediately.
           </p>
         </div>
 
         {/* Content Body */}
-        <div className="p-6">
-          <div className="flex items-center gap-2 mb-6 text-slate-400">
+        <div className="p-5">
+          <div className="flex items-center gap-2 mb-4 text-slate-400">
             <Layers className="w-4 h-4" />
             <h2 className="text-xs font-bold uppercase tracking-widest">
               Examination Roadmap
@@ -88,15 +88,15 @@ export default function PTESectionNotification() {
             {sections.map((section, idx) => (
               <div
                 key={idx}
-                className="group relative flex gap-6 p-5 rounded-2xl border border-slate-100 bg-slate-50 hover:bg-white hover:border-sky-200 hover:shadow-md transition-all duration-300"
+                className="group relative flex gap-6 p-4 rounded-2xl border border-slate-100 bg-slate-50 hover:bg-white hover:border-sky-200 hover:shadow-md transition-all duration-300"
               >
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm group-hover:border-sky-100 transition-colors">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm group-hover:border-sky-100 transition-colors">
                   {section.icon}
                 </div>
 
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
-                    <h3 className="font-bold text-slate-800 text-lg">
+                    <h3 className="font-bold text-slate-800 text-[16px]">
                       {section.title}
                     </h3>
                     <div className="flex items-center gap-1.5 text-slate-500 bg-white px-3 py-1 rounded-full border border-slate-200 text-xs font-semibold">
@@ -138,7 +138,7 @@ export default function PTESectionNotification() {
         <div className="bg-slate-50 border-t border-slate-200 p-6 flex flex-col items-center">
           <Button
             onClick={handleInitialClick}
-            className="w-full max-w-sm py-7 text-lg font-bold bg-sky-600 hover:bg-sky-700 rounded-full shadow-lg hover:shadow-sky-200 transition-all flex gap-3 group text-white"
+            className="w-full max-w-sm py-6 text-lg font-bold bg-sky-600 hover:bg-sky-700 rounded-full shadow-lg hover:shadow-sky-200 transition-all flex gap-3 group text-white"
           >
             Go to Exam
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />

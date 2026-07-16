@@ -1,4 +1,5 @@
 "use client";
+
 import { useState, useRef, useCallback } from "react";
 import { useExamStore } from "@/store";
 
@@ -15,86 +16,111 @@ import { useExamStore } from "@/store";
  *
  * @param {(key: string, value: any) => void} setAnswerKey - Store setter used to persist the recorded audio Blob.
  * @param {number} maxDuration - Maximum allowed recording duration in seconds (reserved for future enforcement).
- * @returns {{
- *   startRecording: () => Promise<boolean>,
- *   stopRecording: () => void,
- *   cleanupStream: () => void,
- *   error: string|null
- * }} Recording controls and any microphone error message.
  */
 export const useAudioRecorder = (setAnswerKey, maxDuration) => {
   const [error, setError] = useState(null);
+
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const chunksRef = useRef([]);
   const capturePromiseRef = useRef(null);
   const resolveCaptureRef = useRef(null);
+
   const setAudioCapturePromise = useExamStore(
     (state) => state.setAudioCapturePromise,
   );
 
   /**
-   * @description Requests microphone access and starts collecting audio chunks.
-   * @returns {Promise<boolean>} True when recording starts successfully; false when mic access fails.
+   * Requests microphone access and starts collecting audio chunks.
    */
   const startRecording = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
+
       streamRef.current = stream;
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+
+      const recorder = new MediaRecorder(stream, {
+        mimeType: "audio/webm",
+      });
+
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
+
       capturePromiseRef.current = new Promise((resolve) => {
         resolveCaptureRef.current = resolve;
       });
+
       setAudioCapturePromise(capturePromiseRef.current);
+
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) {
           chunksRef.current.push(e.data);
         }
       };
+
       recorder.onstop = () => {
         let audioBlob = null;
+
         if (chunksRef.current.length > 0) {
-          audioBlob = new Blob(chunksRef.current, { type: "audio/webm" });
+          audioBlob = new Blob(chunksRef.current, {
+            type: "audio/webm",
+          });
+
           setAnswerKey("answer_audio", audioBlob);
         } else {
           console.error("No audio chunks found at stop.");
           setError("The recording was empty. Please record the answer again.");
         }
+
         resolveCaptureRef.current?.(audioBlob);
         resolveCaptureRef.current = null;
-        // Cleanup tracks
+
         if (streamRef.current) {
           streamRef.current.getTracks().forEach((track) => track.stop());
           streamRef.current = null;
         }
       };
-      // ---> BEEP LOGIC ADDED HERE <---
+
+      // ------------------ BEEP LOGIC ------------------
       try {
-        const beep = new Audio("/beep.mp3"); // Change to match your file name in the public folder
-        beep.play();
+        const beep = new Audio("/beep.mp3");
+
+        // Wait until the beep finishes playing
+        await new Promise((resolve, reject) => {
+          beep.onended = resolve;
+          beep.onerror = reject;
+
+          beep.play().catch(reject);
+        });
+
+        // Wait an additional 2 seconds
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       } catch (err) {
         console.error("Failed to play beep:", err);
       }
-      // -------------------------------
-      // CRITICAL CHANGE: Pass 1000ms to collect data every second
-      // This makes short recordings much more reliable
+
+      // Start recording after beep + 2 second delay
       recorder.start(1000);
+
       return true;
     } catch (err) {
       console.error("Mic access error:", err);
+
       setError("Microphone access denied or not found.");
+
       const failedCapture = Promise.resolve(null);
+
       capturePromiseRef.current = failedCapture;
       setAudioCapturePromise(failedCapture);
+
       return false;
     }
   }, [setAnswerKey, setAudioCapturePromise]);
 
   /**
-   * @description Stops the active recording session (if one is running). Triggers `MediaRecorder.onstop`.
-   * @returns {void}
+   * Stops the active recording session.
    */
   const stopRecording = useCallback(() => {
     if (
@@ -103,22 +129,26 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
     ) {
       mediaRecorderRef.current.stop();
     }
+
     return capturePromiseRef.current || Promise.resolve(null);
   }, []);
 
   /**
-   * @description Stops recording and releases any open microphone tracks.
-   * Use this on unmount to avoid leaving the microphone active.
-   *
-   * @returns {void}
+   * Stops recording and releases microphone tracks.
    */
   const cleanupStream = useCallback(() => {
     stopRecording();
+
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
   }, [stopRecording]);
 
-  return { startRecording, stopRecording, cleanupStream, error };
+  return {
+    startRecording,
+    stopRecording,
+    cleanupStream,
+    error,
+  };
 };

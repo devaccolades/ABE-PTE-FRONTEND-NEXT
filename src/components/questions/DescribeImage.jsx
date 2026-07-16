@@ -117,7 +117,7 @@ export default function DescribeImage({
           <img
             src={imageUrl}
             alt="Describe visual content"
-            className="h-auto max-h-[250px] sm:max-h-[350px] md:max-h-[450px] w-full object-contain transition-transform duration-500 hover:scale-[1.02]"
+            className="h-auto max-h-[350px] w-full object-contain transition-transform duration-500 hover:scale-[1.02]"
           />
         </div>
       </div>
