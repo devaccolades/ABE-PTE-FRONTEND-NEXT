@@ -163,7 +163,7 @@ export default function AudioHighlightBox({
         />
       </div>
 
-      <div className="rounded-2xl md:rounded-3xl border border-gray-100 p-5 md:p-6 bg-white shadow-xl text-gray-800 leading-[2.5rem] text-lg md:text-xl transition-all">
+      <div className="rounded-2xl md:rounded-3xl border border-gray-100 p-5 md:p-6 bg-white shadow-xl text-gray-800 leading-[2rem] text-lg md:text-xl transition-all">
         {tokens.map((t, idx) => {
           if (!t.isWord) {
             return <span key={idx} className="select-none">{t.value}</span>;

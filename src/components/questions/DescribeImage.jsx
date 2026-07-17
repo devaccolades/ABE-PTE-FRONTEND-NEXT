@@ -45,10 +45,14 @@ export default function DescribeImage({
     0, 
     recordSeconds,
     questionId,
-    () => {
+    async () => {
       if (isSectionExpired) return;
-      timerHook.setPhase(PHASES.RECORDING);
-      startAudio();
+      const success = await startAudio();
+      if (success) {
+        timerHook.setPhase(PHASES.RECORDING);
+      } else {
+        timerHook.setPhase(PHASES.FINISHED);
+      }
     },
     () => {},
     () => {
@@ -63,11 +67,11 @@ export default function DescribeImage({
 
   // Handle ExamShell Stop Signal
   useEffect(() => {
-    if (stopSignal && phase === PHASES.RECORDING) {
+    if (stopSignal) {
       stopAudio();
       timerHook.setPhase(PHASES.FINISHED);
     }
-  }, [stopSignal, stopAudio, phase, timerHook]);
+  }, [stopSignal, stopAudio, timerHook]);
 
   // Handle Section Expiration
   useEffect(() => {
