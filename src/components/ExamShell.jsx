@@ -162,11 +162,8 @@ export default function ExamShell({ mocktestList }) {
         const payload = await response.json().catch(() => ({}));
 
         const completedSession = payload.session || payload;
-        const isCompleted = Boolean(
-          payload.is_completed ?? completedSession?.is_completed,
-        );
 
-        if (!response.ok || !isCompleted) {
+        if (!response.ok) {
           console.error("Complete session failed:", {
             status: response.status,
             payload,
@@ -174,7 +171,15 @@ export default function ExamShell({ mocktestList }) {
           throw new Error(payload.error || "Could not complete the exam session.");
         }
 
-        persistCompletedExam(completedSession.completed_at || payload.completed_at);
+        const completedAt =
+          completedSession.completed_at || payload.completed_at;
+        if (!completedAt) {
+          throw new Error("The server did not confirm the exam submission.");
+        }
+
+        // `completed_at` confirms that the candidate finished submitting.
+        // `is_completed` remains false until all asynchronous evaluations finish.
+        persistCompletedExam(completedAt);
         return payload;
       } catch (error) {
         lastError = error;
@@ -444,11 +449,47 @@ export default function ExamShell({ mocktestList }) {
   useEffect(() => {
     // Only attempt to load questions after store state has been rehydrated and we have a session id available.
     if (!rehydrated || !sessionId || examCompleted) return;
-    const resumeUrl = localStorage.getItem("current_question");
-    loadQuestion(
-      resumeUrl || `${baseUrl}get-question/?session_id=${sessionId}`,
-    );
-  }, [rehydrated, sessionId, baseUrl, loadQuestion, examCompleted]);
+
+    let cancelled = false;
+
+    const restoreSession = async () => {
+      try {
+        const statusResponse = await fetch(
+          `${baseUrl}session-evaluation-status/?session_id=${encodeURIComponent(sessionId)}`,
+        );
+        if (statusResponse.ok) {
+          const statusPayload = await statusResponse.json();
+          if (statusPayload.exam_completed_at) {
+            if (!cancelled) {
+              persistCompletedExam(statusPayload.exam_completed_at);
+            }
+            return;
+          }
+        }
+      } catch (error) {
+        console.warn("Could not restore session completion status:", error);
+      }
+
+      if (cancelled) return;
+      const resumeUrl = localStorage.getItem("current_question");
+      await loadQuestion(
+        resumeUrl || `${baseUrl}get-question/?session_id=${sessionId}`,
+      );
+    };
+
+    restoreSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    rehydrated,
+    sessionId,
+    baseUrl,
+    loadQuestion,
+    examCompleted,
+    persistCompletedExam,
+  ]);
 
   // Persist remainingTime whenever it updates (separate from 10-min local timers)
   useEffect(() => {
@@ -566,11 +607,14 @@ export default function ExamShell({ mocktestList }) {
         body: formData,
       });
 
-      if (!postRes.ok) {
-        const payload = await postRes.json().catch(() => ({}));
+      const submission = await postRes.json().catch(() => ({}));
+      const isAlreadySubmitted =
+        postRes.status === 409 && Boolean(submission.response_id);
+
+      if (!postRes.ok && !isAlreadySubmitted) {
+        const payload = submission;
         throw new Error(payload.error || "Submission failed");
       }
-      const submission = await postRes.json();
 
       setStopSignal(false);
       resetAnswer();
@@ -599,7 +643,7 @@ export default function ExamShell({ mocktestList }) {
       if (nextQuestionUrl) {
         await loadQuestion(nextQuestionUrl);
       } else {
-        if (submission.session?.is_completed) {
+        if (submission.session?.completed_at) {
           persistCompletedExam(submission.session.completed_at);
         } else {
           await completeSession();
