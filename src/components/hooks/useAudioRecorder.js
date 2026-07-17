@@ -25,6 +25,7 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
   const chunksRef = useRef([]);
   const capturePromiseRef = useRef(null);
   const resolveCaptureRef = useRef(null);
+  const isStoppingRef = useRef(false);
 
   const setAudioCapturePromise = useExamStore(
     (state) => state.setAudioCapturePromise,
@@ -34,10 +35,16 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
    * Requests microphone access and starts collecting audio chunks.
    */
   const startRecording = useCallback(async () => {
+    isStoppingRef.current = false;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
       });
+
+      if (isStoppingRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return false;
+      }
 
       streamRef.current = stream;
 
@@ -95,10 +102,23 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
           beep.play().catch(reject);
         });
 
-        // Wait an additional 2 seconds
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        if (isStoppingRef.current) {
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach((track) => track.stop());
+            streamRef.current = null;
+          }
+          return false;
+        }
       } catch (err) {
         console.error("Failed to play beep:", err);
+      }
+
+      if (isStoppingRef.current) {
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+        }
+        return false;
       }
 
       // Start recording after beep + 2 second delay
@@ -123,11 +143,23 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
    * Stops the active recording session.
    */
   const stopRecording = useCallback(() => {
+    isStoppingRef.current = true;
+
     if (
       mediaRecorderRef.current &&
       mediaRecorderRef.current.state !== "inactive"
     ) {
       mediaRecorderRef.current.stop();
+    } else {
+      // If the recorder was never started or is inactive, resolve the promise immediately with null
+      if (resolveCaptureRef.current) {
+        resolveCaptureRef.current(null);
+        resolveCaptureRef.current = null;
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
     }
 
     return capturePromiseRef.current || Promise.resolve(null);

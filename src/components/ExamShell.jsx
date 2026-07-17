@@ -530,12 +530,14 @@ export default function ExamShell({ mocktestList }) {
 
     if (currentPhase === "recording" || currentPhase === "prep") {
       // When leaving a recording/prep phase, broadcast a stop signal so the active question component can finalize.
+      console.log("Setting stop signal...");
       setStopSignal(true);
       setLoading(true);
     }
 
     if (currentQuestion?.ai_input_type === "audio") {
       const capturePromise = useExamStore.getState().audioCapturePromise;
+      console.log("capturePromise:", capturePromise);
       let audioBlob = null;
 
       try {

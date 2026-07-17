@@ -58,16 +58,21 @@ export default function RetellLecture({
     return specialTypes.includes(subsection) ? 10 : 0;
   }, [subsection]);
 
-  // --- 3. ENGINES ---
+  // --- 3. ENGINES & TIMERS ---
   const { startRecording, stopRecording, cleanupStream } = useAudioRecorder(
     setAnswerKey,
     recordSeconds
   );
 
-  const triggerRecordingStart = useCallback(() => {
-    updateStage("RECORDING");
-    timerHook.setPhase(PHASES.RECORDING);
-    startRecording();
+  const triggerRecordingStart = useCallback(async () => {
+    const success = await startRecording();
+    if (success) {
+      updateStage("RECORDING");
+      timerHook.setPhase(PHASES.RECORDING);
+    } else {
+      updateStage("FINISHED");
+      timerHook.setPhase(PHASES.FINISHED);
+    }
   }, [startRecording]);
 
   const handleMediaPlaybackEnd = useCallback(() => {
@@ -92,22 +97,6 @@ export default function RetellLecture({
   } = useMediaPlayback(primaryMediaSrc, handleMediaPlaybackEnd, () => {});
 // Removed formatFraction; using formatTime from useMediaPlayback hook
 
-  // --- 4. EFFECTS ---
-  useEffect(() => {
-    if (stopSignal) {
-      if (stageRef.current === "RECORDING") {
-        stopRecording();
-        updateStage("FINISHED");
-      } else if (
-        stageRef.current === "PLAYING" ||
-        stageRef.current === "PREP"
-      ) {
-        updateStage("FINISHED");
-        if (pauseMedia) pauseMedia();
-      }
-    }
-  }, [stopSignal, stopRecording, pauseMedia]);
-
   const timerHook = useSequentialTimer(
     prepSeconds,
     recordPrepSeconds,
@@ -125,6 +114,15 @@ export default function RetellLecture({
       stopRecording();
     }
   );
+
+  // --- 4. EFFECTS ---
+  useEffect(() => {
+    if (stopSignal) {
+      stopRecording();
+      updateStage("FINISHED");
+      if (pauseMedia) pauseMedia();
+    }
+  }, [stopSignal, stopRecording, pauseMedia]);
 
   useEffect(() => {
     if (stage === "RECORDING") globalPhase("recording");

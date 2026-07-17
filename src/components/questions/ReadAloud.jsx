@@ -67,9 +67,12 @@ export default function ReadAloud({
     async () => {
       // Callback: Start Recording after Prep
       if (isSectionExpired) return;
-      timerHook.setPhase(PHASES.RECORDING);
       const success = await startAudio();
-      if (!success) timerHook.setPhase(PHASES.FINISHED);
+      if (success) {
+        timerHook.setPhase(PHASES.RECORDING);
+      } else {
+        timerHook.setPhase(PHASES.FINISHED);
+      }
     },
     () => {
       // Callback: Stop Recording when time is up
@@ -86,9 +89,7 @@ export default function ReadAloud({
     if (isStopSignalSent) {
       const handleForcedStop = async () => {
         // Stop recorder immediately so Blob processing starts
-        if (phase === PHASES.RECORDING) {
-          await stopAudio();
-        }
+        await stopAudio();
         timerHook.setPhase(PHASES.FINISHED);
 
         // Acknowledge the signal back to ExamShell
@@ -97,7 +98,7 @@ export default function ReadAloud({
 
       handleForcedStop();
     }
-  }, [isStopSignalSent, phase, stopAudio, setStopSignal, timerHook]);
+  }, [isStopSignalSent, stopAudio, setStopSignal, timerHook]);
 
   // --- 6. Sync Global Phase and Cleanup ---
   useEffect(() => {
