@@ -19,6 +19,9 @@ const TopSection = ({ onClose }) => {
     (state) => state.setCurrentQuestionName,
   );
   const setIsMockTest = mocktestStore((state) => state.setIsMockTest);
+  const setSelectedQuestion = mocktestStore(
+    (state) => state.setSelectedQuestion,
+  );
 
   const speaking = [
     { id: "read_aloud", title: "Read Aloud" },
@@ -61,6 +64,7 @@ const TopSection = ({ onClose }) => {
    * @returns {void}
    */
   const handleClick = (id, title) => {
+    setSelectedQuestion(null);
     setCurrentQuestion(id);
     setIsSideOpen(true);
     setCurrentQuestionName(title);

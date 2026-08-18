@@ -1,5 +1,16 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  AlertCircle,
+  CheckCircle2,
+  FileSearch,
+  Lightbulb,
+  LoaderCircle,
+  MessageSquareText,
+  RotateCcw,
+  X,
+} from "lucide-react";
 import { mocktestStore } from "../mocktestStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useExamStore } from "@/store";
@@ -37,44 +48,111 @@ import toast, { Toaster } from "react-hot-toast";
  * @returns {JSX.Element} Mock-test question UI including the confirmation modal.
  */
 const ExamComponent = () => {
+  const router = useRouter();
   const selectedQuestion = mocktestStore((state) => state.selectedQuestion);
   const currentQuestion = mocktestStore((state) => state.currentQuestion);
   const baseUrl = mocktestStore((state) => state.baseUrl);
+  const setIsSideOpen = mocktestStore((state) => state.setIsSideOpen);
   const phase = useExamStore((state) => state.phase);
   const [callAreYouSure, setCallAreYouSure] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [name, setName] = useState("");
-  const [loading, setLoading] = useState();
+  const [isNameDialogOpen, setIsNameDialogOpen] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [evaluationState, setEvaluationState] = useState(null);
   const setStopSignal = useExamStore((state) => state.setStopSignal);
   const resetAnswer = useExamStore((state) => state.resetAnswer);
+  const pollTimerRef = useRef(null);
+  const trackingIdRef = useRef(null);
 
   /**
    * @description Stores the candidate name used for single-question mock-test submissions.
    * @returns {void}
    */
   const handleSubmit = () => {
-    setName(inputValue);
+    const candidateName = inputValue.trim();
+    if (!candidateName) {
+      toast.error("Enter your name to continue.");
+      return;
+    }
+    setName(candidateName);
+    setIsNameDialogOpen(false);
+  };
+
+  const closeNameDialog = () => {
+    setIsNameDialogOpen(false);
+    router.replace("/");
   };
 
   useEffect(() => {
-    if (selectedQuestion) {
-      const isReadingQuestion =
-        [
-          "fib_dropdown",
-          "fib_drag_drop",
-          "mc_multiple",
-          "mc_single",
-          "reorder_paragraphs",
-          "mcq-multi",
-          "mcq-single",
-          "reorder-paragraphs",
-        ].includes(currentQuestion);
+    if (!isNameDialogOpen || name) return undefined;
 
-      if (isReadingQuestion) {
-        console.log("📖 [Practice Fetch] Loaded Reading Question Data:", selectedQuestion);
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") {
+        setIsNameDialogOpen(false);
+        router.replace("/");
+      }
+    };
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [isNameDialogOpen, name, router]);
+
+  useEffect(() => {
+    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    trackingIdRef.current = null;
+    setEvaluationState(null);
+    setLoading(false);
+    setStopSignal(false);
+    resetAnswer();
+  }, [selectedQuestion?.id, resetAnswer, setStopSignal]);
+
+  useEffect(() => () => {
+    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+  }, []);
+
+  const pollEvaluation = async (trackingId, attempt = 0) => {
+    if (trackingIdRef.current !== trackingId) return;
+
+    try {
+      const response = await fetch(
+        `${baseUrl}single-response-status/${trackingId}/`,
+        { cache: "no-store" },
+      );
+      if (!response.ok) throw new Error("Evaluation status could not be loaded.");
+
+      const payload = await response.json();
+      if (trackingIdRef.current !== trackingId) return;
+      setEvaluationState(payload);
+
+      if (payload.terminal) return;
+      if (attempt >= 149) {
+        setEvaluationState((current) => ({
+          ...current,
+          status: "delayed",
+          terminal: true,
+          message: "Evaluation is still running in the background. Please try this question again later.",
+        }));
+        return;
+      }
+    } catch (error) {
+      if (attempt >= 149) {
+        setEvaluationState({
+          status: "failed",
+          terminal: true,
+          message: error.message || "Evaluation status could not be loaded.",
+          error: error.message || "Evaluation status could not be loaded.",
+          feedback: emptyFeedback(),
+        });
+        return;
       }
     }
-  }, [selectedQuestion, currentQuestion]);
+
+    pollTimerRef.current = setTimeout(
+      () => pollEvaluation(trackingId, attempt + 1),
+      2000,
+    );
+  };
 
   /**
    * @description Submits the current mock-test answer to the backend.
@@ -87,7 +165,15 @@ const ExamComponent = () => {
    * @returns {Promise<void>}
    */
   const handleModalNext = async () => {
+    if (!name) {
+      setCallAreYouSure(false);
+      setIsNameDialogOpen(true);
+      toast.error("Enter your name before submitting your answer.");
+      return;
+    }
+
     setCallAreYouSure(false);
+    setLoading(true);
     // 1. Check if the question is currently in a recording/active state
     const currentPhase = useExamStore.getState().phase;
 
@@ -95,8 +181,6 @@ const ExamComponent = () => {
     // Logic: If it's not finished, we need to manually end the recording
     if (currentPhase === "recording" || currentPhase === "prep") {
       setStopSignal(true);
-      setLoading(true);
-
     }
 
     if (selectedQuestion?.ai_input_type === "audio") {
@@ -129,9 +213,8 @@ const ExamComponent = () => {
 
     // 3. Prepare FormData
     const formData = new FormData();
-    // formData.append("session_id", sessionId);
     formData.append("name", name);
-    formData.append("question_name", selectedQuestion.name);
+    formData.append("question_id", selectedQuestion.id);
 
     // Handle Audio: Only append if it's a valid Blob
     if (finalAnswer.answer_audio instanceof Blob) {
@@ -147,76 +230,99 @@ const ExamComponent = () => {
       formData.append("answer", answerVal);
     }
 
-    // Console log Reading section question answer when submitted in practice mode
-    const isReadingQuestion =
-      [
-        "fib_dropdown",
-        "fib_drag_drop",
-        "mc_multiple",
-        "mc_single",
-        "reorder_paragraphs",
-        "mcq-multi",
-        "mcq-single",
-        "reorder-paragraphs",
-      ].includes(currentQuestion);
-
-    if (isReadingQuestion) {
-      console.log("📝 [Practice Submit] Submitting Reading Answer:", {
-        question_name: selectedQuestion.name,
-        answer: finalAnswer.answer,
-      });
-    }
-
     try {
       const postRes = await fetch(`${baseUrl}single-response/`, {
         method: "POST",
         body: formData,
       });
+      const payload = await postRes.json().catch(() => ({}));
       if (!postRes.ok) {
-        const payload = await postRes.json().catch(() => ({}));
         throw new Error(payload.error || "Submission failed");
       }
 
-      toast.success("Successfully completed the submission try next one!");
+      const trackingId = payload.evaluation?.tracking_id;
+      if (!trackingId) {
+        throw new Error("Evaluation tracking was not created.");
+      }
 
-      // 4. CLEANUP: Reset store for the next question
+      trackingIdRef.current = trackingId;
+      setEvaluationState({
+        status: payload.evaluation.status || "pending",
+        stage: payload.evaluation.stage || "queued",
+        terminal: false,
+        retrying: Boolean(payload.evaluation.retryable),
+        message: payload.evaluation.message || "Your answer is queued for evaluation.",
+        feedback: emptyFeedback(),
+        transcript: "",
+        error: "",
+      });
+      toast.success("Answer submitted. Evaluation is in progress.");
+
       setStopSignal(false);
-      resetAnswer(); // Ensure this clears both 'answer' and 'answer_audio'
-
-      // if (nextQuestionUrl) {
-      //   loadQuestion(nextQuestionUrl);
-      // } else {
-      //   setLoading(false);
-      //   setCurrentQuestion(null); // Shows ExamCompleteScreen
-      // }
+      resetAnswer();
+      setLoading(false);
+      pollEvaluation(trackingId);
     } catch (error) {
       console.error("Submission Error:", error);
-      alert("Submission failed. Please try again.");
+      toast.error(error.message || "Submission failed. Please try again.");
       setLoading(false);
       setStopSignal(false);
     }
   };
 
+  const clearEvaluation = () => {
+    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    trackingIdRef.current = null;
+    setEvaluationState(null);
+    setLoading(false);
+    resetAnswer();
+  };
+
+  const chooseAnotherQuestion = () => {
+    clearEvaluation();
+    setIsSideOpen(true);
+  };
+
+  const requestSubmission = () => {
+    if (!name) {
+      setIsNameDialogOpen(true);
+      return;
+    }
+    setCallAreYouSure(true);
+  };
+
   return (
-    // <div className="flex justify-center items-center h-[80vh] w-full">
-    //   <div className="w-[60%] h-[50vh] bg-blue-50 rounded-lg flex flex-col overflow-hidden">
-    //     <div className="h-[20%] bg-blue-100 w-full p-5 flex items-center justify-between">
-    //       <p className="uppercase text-lg font-semibold">
-    //         Question Name : {selectedQuestion?.name}
-    //       </p>
-    //       <div className="flex items-start w-[40%]">
-    //         <p className="uppercase text-md font-semibold ">candidate : </p>
-    //       </div>
-    //     </div>
-    //   </div>
-    // </div>
     <div className="flex justify-center items-start h-[80vh] relative mt-56 md:mt-40 w-[90%] mx-auto">
       <Toaster position="top-center" reverseOrder={false} />
-      {!name && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-blue-900/40 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 animate-fadeIn">
+      {!name && isNameDialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-blue-900/40 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeNameDialog();
+          }}
+        >
+          <div
+            className="relative w-full max-w-md rounded-lg bg-white p-8 shadow-2xl animate-fadeIn"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="candidate-name-title"
+          >
+            <button
+              type="button"
+              onClick={closeNameDialog}
+              className="absolute right-4 top-4 inline-flex size-9 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+              aria-label="Close name dialog"
+              title="Close"
+            >
+              <X size={19} />
+            </button>
+
             {/* Title */}
-            <h2 className="text-xl font-semibold text-blue-600 text-center">
+            <h2
+              id="candidate-name-title"
+              className="text-center text-xl font-semibold text-blue-600"
+            >
               Enter Your Name
             </h2>
 
@@ -233,14 +339,27 @@ const ExamComponent = () => {
                 placeholder="Your name"
                 className="w-full px-4 py-3 rounded-lg border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition"
                 onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") handleSubmit();
+                }}
               />
 
-              <button
-                onClick={handleSubmit}
-                className="w-full py-3 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium hover:from-blue-600 hover:to-blue-700 transition active:scale-[0.98]"
-              >
-                Continue
-              </button>
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={closeNameDialog}
+                  className="rounded-md border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  className="rounded-md bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 active:scale-[0.98]"
+                >
+                  Continue
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -252,10 +371,19 @@ const ExamComponent = () => {
             <CardTitle className="text-sky-800 text-lg md:text-xl">
               {titleFor(currentQuestion, selectedQuestion)}
             </CardTitle>
-            <div className="text-xs md:text-sm text-gray-500">
-              Candidate: {"" + name}
-              {/* <span className="font-bold text-gray-700">{userName }</span> */}
-            </div>
+            {name ? (
+              <div className="text-xs text-gray-500 md:text-sm">
+                Candidate: {name}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsNameDialogOpen(true)}
+                className="text-left text-xs font-semibold text-sky-700 hover:text-sky-900 md:text-sm"
+              >
+                Add candidate name
+              </button>
+            )}
           </div>
         </CardHeader>
 
@@ -286,19 +414,47 @@ const ExamComponent = () => {
             </div>
           )}
 
-          {/* Footer: Full-width button on mobile for better thumb reach */}
-          <div className="mt-6 md:mt-10 pt-4 border-t flex justify-end">
-            <button
-              disabled={phase === "prep"}
-              onClick={() => setCallAreYouSure(true)}
-              className={`w-full sm:w-auto px-10 py-3 md:py-2 rounded-lg md:rounded-md font-bold transition-all text-base md:text-sm ${
-                phase === "prep"
-                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  : "bg-sky-600 text-white hover:bg-sky-700 shadow-md active:scale-95"
-              }`}
-            >
-              Next
-            </button>
+          {evaluationState && (
+            <EvaluationFeedback result={evaluationState} />
+          )}
+
+          <div className="mt-6 flex flex-col justify-end gap-3 border-t pt-4 sm:flex-row md:mt-10">
+            {selectedQuestion && !evaluationState && (
+              <button
+                disabled={phase === "prep" || loading}
+                onClick={requestSubmission}
+                className={`w-full rounded-md px-6 py-3 text-sm font-bold transition-colors sm:w-auto ${
+                  phase === "prep" || loading
+                    ? "cursor-not-allowed bg-slate-100 text-slate-400"
+                    : "bg-sky-600 text-white hover:bg-sky-700"
+                }`}
+              >
+                {loading ? "Preparing answer..." : "Submit for evaluation"}
+              </button>
+            )}
+
+            {evaluationState?.terminal && (
+              <>
+                {evaluationState.status === "failed" && (
+                  <button
+                    type="button"
+                    onClick={clearEvaluation}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto"
+                  >
+                    <RotateCcw size={17} />
+                    Try again
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={chooseAnotherQuestion}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-sky-600 px-5 py-3 text-sm font-semibold text-white hover:bg-sky-700 sm:w-auto"
+                >
+                  <FileSearch size={17} />
+                  Choose another question
+                </button>
+              </>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -306,11 +462,189 @@ const ExamComponent = () => {
         <AreyousureModal
           onClose={() => setCallAreYouSure(false)}
           onNext={handleModalNext}
+          content="Submit this answer for evaluation?"
+          nextQuestion="Submit Answer"
         />
       )}
     </div>
   );
 };
+
+function EvaluationFeedback({ result }) {
+  const feedback = result.feedback || emptyFeedback();
+  const isWorking = !result.terminal;
+  const isFailed = result.status === "failed";
+  const isDelayed = result.status === "delayed";
+  const statusStyle = isFailed
+    ? "border-red-200 bg-red-50 text-red-800"
+    : isDelayed
+      ? "border-amber-200 bg-amber-50 text-amber-800"
+    : isWorking
+      ? "border-sky-200 bg-sky-50 text-sky-800"
+      : "border-emerald-200 bg-emerald-50 text-emerald-800";
+
+  return (
+    <section className="mt-8 border-t border-slate-200 pt-6" aria-live="polite">
+      <div className={`flex items-start gap-3 border p-4 ${statusStyle}`}>
+        {isWorking ? (
+          <LoaderCircle className="mt-0.5 shrink-0 animate-spin" size={20} />
+        ) : isFailed || isDelayed ? (
+          <AlertCircle className="mt-0.5 shrink-0" size={20} />
+        ) : (
+          <CheckCircle2 className="mt-0.5 shrink-0" size={20} />
+        )}
+        <div>
+          <h2 className="font-semibold">
+            {isWorking
+              ? "Evaluation in progress"
+              : isFailed
+                ? "Evaluation could not be completed"
+                : isDelayed
+                  ? "Evaluation delayed"
+                : "Evaluation feedback"}
+          </h2>
+          <p className="mt-1 text-sm leading-6">{result.message}</p>
+        </div>
+      </div>
+
+      {!isWorking && !isFailed && !isDelayed && (
+        <div className="mt-5 space-y-6">
+          {feedback.summary && (
+            <FeedbackSection icon={MessageSquareText} title="Overall feedback">
+              <p className="text-sm leading-7 text-slate-700">{feedback.summary}</p>
+            </FeedbackSection>
+          )}
+
+          {result.transcript && (
+            <FeedbackSection icon={MessageSquareText} title="Your transcript">
+              <p className="text-sm leading-7 text-slate-700">{result.transcript}</p>
+            </FeedbackSection>
+          )}
+
+          {feedback.observations?.length > 0 && (
+            <FeedbackSection icon={Lightbulb} title="What the evaluation found">
+              <dl className="divide-y divide-slate-100">
+                {feedback.observations.map((item) => (
+                  <div key={item.label} className="py-3 first:pt-0 last:pb-0">
+                    <dt className="text-xs font-semibold uppercase text-slate-500">
+                      {item.label}
+                    </dt>
+                    <dd className="mt-1 text-sm leading-6 text-slate-700">
+                      {formatFeedbackValue(item.value)}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </FeedbackSection>
+          )}
+
+          {feedback.details?.length > 0 && (
+            <FeedbackSection icon={FileSearch} title="Answer details">
+              <div className="divide-y divide-slate-100">
+                {feedback.details.map((detail, index) => (
+                  <div key={`${detail.label || "detail"}-${index}`} className="py-3 first:pt-0 last:pb-0">
+                    <p className="text-sm font-semibold text-slate-800">
+                      {detail.label || `Item ${index + 1}`}
+                    </p>
+                    <dl className="mt-2 space-y-1 text-sm text-slate-600">
+                      {Object.entries(detail)
+                        .filter(
+                          ([key, value]) =>
+                            key !== "label" &&
+                            value !== null &&
+                            value !== undefined &&
+                            value !== "",
+                        )
+                        .map(([key, value]) => (
+                          <div key={key} className="flex flex-wrap gap-x-2">
+                            <dt className="font-medium capitalize text-slate-500">
+                              {key.replaceAll("_", " ")}:
+                            </dt>
+                            <dd>{formatFeedbackValue(value)}</dd>
+                          </div>
+                        ))}
+                    </dl>
+                  </div>
+                ))}
+              </div>
+            </FeedbackSection>
+          )}
+
+          {feedback.errors?.length > 0 && (
+            <FeedbackSection icon={AlertCircle} title="Language corrections">
+              <div className="space-y-3">
+                {feedback.errors.map((error, index) => {
+                  const isSpelling = error.type === "spelling";
+                  return (
+                    <div
+                      key={`${error.type || "error"}-${error.text || index}`}
+                      className={`border-l-4 px-3 py-2 ${
+                        isSpelling
+                          ? "border-red-500 bg-red-50"
+                          : "border-blue-500 bg-blue-50"
+                      }`}
+                    >
+                      <p className="text-xs font-semibold uppercase text-slate-600">
+                        {isSpelling ? "Spelling" : "Grammar"}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-800">
+                        <span className="font-medium">{error.text}</span>
+                        {error.suggestion && <> → {error.suggestion}</>}
+                      </p>
+                      {error.explanation && (
+                        <p className="mt-1 text-xs leading-5 text-slate-600">
+                          {error.explanation}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </FeedbackSection>
+          )}
+
+          {feedback.explanation && (
+            <FeedbackSection icon={Lightbulb} title="Explanation">
+              <p className="text-sm leading-7 text-slate-700">
+                {feedback.explanation}
+              </p>
+            </FeedbackSection>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function FeedbackSection({ icon: Icon, title, children }) {
+  return (
+    <section>
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+        <Icon className="text-sky-600" size={17} />
+        {title}
+      </h3>
+      <div className="mt-2 border-l border-slate-200 pl-6">{children}</div>
+    </section>
+  );
+}
+
+function formatFeedbackValue(value) {
+  if (Array.isArray(value)) return value.join(", ");
+  if (value && typeof value === "object") {
+    return Object.values(value).map(formatFeedbackValue).join(", ");
+  }
+  return String(value ?? "");
+}
+
+function emptyFeedback() {
+  return {
+    summary: "",
+    details: [],
+    errors: [],
+    explanation: "",
+    observations: [],
+  };
+}
 
 /**
  * @description Maps backend subsection codes to display titles for the mock-test header.
