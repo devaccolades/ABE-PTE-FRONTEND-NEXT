@@ -41,36 +41,38 @@ export default function AudioHighlightBox({
     if (status === "LOADING") setStatus("PREP");
   }, [status]);
 
-  useEffect(() => {
-    let timer;
-    if (status === "PREP") {
-      if (prepLeft <= 0) {
-        handleStartAudio();
-      } else {
-        timer = setTimeout(() => setPrepLeft((s) => s - 1), 1000);
-      }
-    }
-    return () => clearTimeout(timer);
-  }, [status, prepLeft]);
-
-  const handleStartAudio = async () => {
+  const handleStartAudio = useCallback(async () => {
     setStatus("PLAYING");
     if (audioRef.current) {
       try {
         await audioRef.current.play();
-      } catch (err) {
+      } catch {
         setSourceError("Tap text to enable audio.");
       }
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    let timer;
+    if (status === "PREP") {
+      timer = setTimeout(() => {
+        if (prepLeft <= 0) handleStartAudio();
+        else setPrepLeft((seconds) => seconds - 1);
+      }, prepLeft <= 0 ? 0 : 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [status, prepLeft, handleStartAudio]);
 
   // --- UPDATED NEXT BUTTON LOGIC ---
   useEffect(() => {
-    const selectedWords = Array.from(highlighted)
-      .map((idx) => tokens[idx].value)
-      .join(",");
+    const selections = Array.from(highlighted)
+      .sort((left, right) => left - right)
+      .map((idx) => ({
+        word_index: tokens[idx].wordIndex,
+        word: tokens[idx].value,
+      }));
 
-    setAnswerKey("answer", selectedWords);
+    setAnswerKey("answer", { selections });
 
     // Condition: Enable "Next" if the section expired OR the audio status is "FINISHED"
     // It no longer depends on whether a word is highlighted (highlighted.size)
@@ -206,12 +208,17 @@ export default function AudioHighlightBox({
 
 function tokenize(str) {
   if (!str) return [];
-  const regex = /([A-Za-z0-9\u00C0-\u017F'\-]+)|(\s+|[^\sA-Za-z0-9\u00C0-\u017F'\-]+)/g;
+  const regex = /([\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*)|(\s+|[^\s\p{L}\p{N}]+)/gu;
   const tokens = [];
+  let wordIndex = 0;
   let m;
   while ((m = regex.exec(str)) !== null) {
-    if (m[1]) tokens.push({ value: m[1], isWord: true });
-    else if (m[2]) tokens.push({ value: m[2], isWord: false });
+    if (m[1]) {
+      tokens.push({ value: m[1], isWord: true, wordIndex });
+      wordIndex += 1;
+    } else if (m[2]) {
+      tokens.push({ value: m[2], isWord: false, wordIndex: null });
+    }
   }
   return tokens;
 }
