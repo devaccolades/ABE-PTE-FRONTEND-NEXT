@@ -3,6 +3,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
+  BookOpenCheck,
+  Calculator,
   CheckCircle2,
   FileSearch,
   Lightbulb,
@@ -509,6 +511,10 @@ function EvaluationFeedback({ result }) {
 
       {!isWorking && !isFailed && !isDelayed && (
         <div className="mt-5 space-y-6">
+          {result.score_breakdown && (
+            <ScoreBreakdown breakdown={result.score_breakdown} />
+          )}
+
           {feedback.summary && (
             <FeedbackSection icon={MessageSquareText} title="Overall feedback">
               <p className="text-sm leading-7 text-slate-700">{feedback.summary}</p>
@@ -616,6 +622,159 @@ function EvaluationFeedback({ result }) {
   );
 }
 
+function ScoreBreakdown({ breakdown }) {
+  const combined = breakdown.combined || {};
+  const skills = breakdown.skill_contributions || [];
+  const criteria = breakdown.criteria || [];
+  const scoringLabel =
+    breakdown.scoring_version === "pte-score-v2"
+      ? "Proportional V2"
+      : "Legacy scoring";
+
+  return (
+    <section aria-labelledby="score-breakdown-title" className="space-y-6">
+      <div className="border border-emerald-200 bg-emerald-50 p-4 md:p-5">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+          <div>
+            <p className="text-xs font-semibold uppercase text-emerald-800">
+              Question contribution
+            </p>
+            <p className="mt-2 text-3xl font-bold text-slate-950">
+              {formatScore(combined.awarded)}
+              <span className="ml-1 text-base font-medium text-slate-500">
+                / {formatScore(combined.maximum)}
+              </span>
+            </p>
+            <p className="mt-1 text-xs text-slate-600">
+              Maximum from the selected question paper
+            </p>
+          </div>
+          <div className="sm:text-right">
+            <p className="text-2xl font-bold text-emerald-800">
+              {formatScore(combined.performance_percentage)}%
+            </p>
+            <p className="text-xs font-medium text-slate-600">
+              Question performance
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 h-2 overflow-hidden bg-white" aria-hidden="true">
+          <div
+            className="h-full bg-emerald-500"
+            style={{
+              width: `${Math.min(
+                100,
+                Math.max(0, Number(combined.performance_percentage) || 0),
+              )}%`,
+            }}
+          />
+        </div>
+        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
+          <span>
+            Evaluation: <strong>{formatScoringLabel(breakdown.evaluation_source)}</strong>
+          </span>
+          <span>
+            Method: <strong>{scoringLabel}</strong>
+          </span>
+        </div>
+      </div>
+
+      {breakdown.gate?.applied && (
+        <div className="flex gap-3 border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <AlertCircle className="mt-0.5 shrink-0" size={18} />
+          <p>
+            A scoring gate was applied because the following criterion received
+            zero: {breakdown.gate.triggered_by.map(formatScoringLabel).join(", ")}.
+          </p>
+        </div>
+      )}
+
+      <div>
+        <h3
+          id="score-breakdown-title"
+          className="flex items-center gap-2 text-sm font-semibold text-slate-900"
+        >
+          <Calculator className="text-sky-600" size={17} />
+          How the question marks were calculated
+        </h3>
+        <div className="mt-3 divide-y divide-slate-200 border-y border-slate-200">
+          {skills.map((item) => (
+            <div
+              key={item.skill}
+              className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+            >
+              <div>
+                <p className="font-semibold text-slate-900">{item.label}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Criteria: {item.criteria.map(formatScoringLabel).join(", ")}
+                </p>
+                <code className="mt-2 block w-fit bg-slate-100 px-2 py-1 text-xs text-slate-700">
+                  {item.formula}
+                </code>
+              </div>
+              <div className="text-left sm:text-right">
+                <p className="text-lg font-bold text-slate-950">
+                  {formatScore(item.awarded)} / {formatScore(item.question_maximum)}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {formatScore(item.percentage)}% of rubric marks
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <BookOpenCheck className="text-sky-600" size={17} />
+          Rubric criteria
+        </h3>
+        <div className="mt-3 divide-y divide-slate-200 border-y border-slate-200">
+          {criteria.map((criterion) => (
+            <details key={criterion.name} className="group py-3">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm">
+                <span>
+                  <strong className="text-slate-900">{criterion.label}</strong>
+                  <span className="ml-2 text-xs text-slate-500">
+                    {criterion.mapped_skills.map(formatScoringLabel).join(", ")}
+                  </span>
+                </span>
+                <span className="shrink-0 font-semibold text-slate-900">
+                  {formatScore(criterion.awarded)} / {formatScore(criterion.maximum)}
+                </span>
+              </summary>
+              <div className="mt-3 border-l-2 border-sky-200 pl-4 text-sm text-slate-700">
+                {criterion.rubric?.matched_descriptor ? (
+                  <p className="leading-6">{criterion.rubric.matched_descriptor}</p>
+                ) : (
+                  <p className="leading-6 text-slate-500">
+                    The evaluator awarded this criterion using the configured rubric.
+                  </p>
+                )}
+                {criterion.rubric?.bands?.length > 0 && (
+                  <dl className="mt-3 space-y-2">
+                    {criterion.rubric.bands.map((band) => (
+                      <div key={`${criterion.name}-${band.score}`} className="flex gap-3">
+                        <dt className="w-6 shrink-0 font-semibold text-slate-900">
+                          {formatScore(band.score)}
+                        </dt>
+                        <dd className="leading-5 text-slate-600">{band.description}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+              </div>
+            </details>
+          ))}
+        </div>
+      </div>
+
+      <p className="text-xs leading-5 text-slate-500">{breakdown.note}</p>
+    </section>
+  );
+}
+
 function FeedbackSection({ icon: Icon, title, children }) {
   return (
     <section>
@@ -634,6 +793,18 @@ function formatFeedbackValue(value) {
     return Object.values(value).map(formatFeedbackValue).join(", ");
   }
   return String(value ?? "");
+}
+
+function formatScore(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "0";
+  return Number.isInteger(number) ? String(number) : number.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+function formatScoringLabel(value) {
+  return String(value || "")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function emptyFeedback() {
