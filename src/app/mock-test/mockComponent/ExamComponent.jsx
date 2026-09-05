@@ -626,10 +626,12 @@ function ScoreBreakdown({ breakdown }) {
   const combined = breakdown.combined || {};
   const skills = breakdown.skill_contributions || [];
   const criteria = breakdown.criteria || [];
-  const scoringLabel =
-    breakdown.scoring_version === "pte-score-v2"
-      ? "Proportional V2"
-      : "Legacy scoring";
+  const evaluationLabel =
+    breakdown.evaluation_source === "ai"
+      ? "This answer was checked by AI against the configured rubric."
+      : breakdown.evaluation_source === "rule"
+        ? "This answer was checked automatically against the configured answer key."
+        : "This answer was checked using the configured evaluation rules.";
 
   return (
     <section aria-labelledby="score-breakdown-title" className="space-y-6">
@@ -637,7 +639,7 @@ function ScoreBreakdown({ breakdown }) {
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
             <p className="text-xs font-semibold uppercase text-emerald-800">
-              Question contribution
+              Your score for this question
             </p>
             <p className="mt-2 text-3xl font-bold text-slate-950">
               {formatScore(combined.awarded)}
@@ -646,7 +648,7 @@ function ScoreBreakdown({ breakdown }) {
               </span>
             </p>
             <p className="mt-1 text-xs text-slate-600">
-              Maximum from the selected question paper
+              The maximum is set in the selected question paper.
             </p>
           </div>
           <div className="sm:text-right">
@@ -654,7 +656,7 @@ function ScoreBreakdown({ breakdown }) {
               {formatScore(combined.performance_percentage)}%
             </p>
             <p className="text-xs font-medium text-slate-600">
-              Question performance
+              of the available marks
             </p>
           </div>
         </div>
@@ -669,14 +671,7 @@ function ScoreBreakdown({ breakdown }) {
             }}
           />
         </div>
-        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
-          <span>
-            Evaluation: <strong>{formatScoringLabel(breakdown.evaluation_source)}</strong>
-          </span>
-          <span>
-            Method: <strong>{scoringLabel}</strong>
-          </span>
-        </div>
+        <p className="mt-4 text-xs leading-5 text-slate-600">{evaluationLabel}</p>
       </div>
 
       {breakdown.gate?.applied && (
@@ -695,7 +690,7 @@ function ScoreBreakdown({ breakdown }) {
           className="flex items-center gap-2 text-sm font-semibold text-slate-900"
         >
           <Calculator className="text-sky-600" size={17} />
-          How the question marks were calculated
+          How your marks were calculated
         </h3>
         <div className="mt-3 divide-y divide-slate-200 border-y border-slate-200">
           {skills.map((item) => (
@@ -705,19 +700,28 @@ function ScoreBreakdown({ breakdown }) {
             >
               <div>
                 <p className="font-semibold text-slate-900">{item.label}</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Criteria: {item.criteria.map(formatScoringLabel).join(", ")}
+                <p className="mt-1 text-sm leading-6 text-slate-700">
+                  You earned {formatScore(item.criterion_awarded)} out of{" "}
+                  {formatScore(item.criterion_maximum)} rubric points
+                  {item.criteria.length > 0 && (
+                    <>
+                      {" "}from {humanList(item.criteria.map(formatScoringLabel))}
+                    </>
+                  )}
+                  . This question carries up to {formatScore(item.question_maximum)}{" "}
+                  {item.label} marks.
                 </p>
-                <code className="mt-2 block w-fit bg-slate-100 px-2 py-1 text-xs text-slate-700">
-                  {item.formula}
-                </code>
+                <p className="mt-2 text-xs font-medium text-slate-600">
+                  Calculation: {formatScore(item.percentage)}% of{" "}
+                  {formatScore(item.question_maximum)} = {formatScore(item.awarded)}
+                </p>
               </div>
               <div className="text-left sm:text-right">
                 <p className="text-lg font-bold text-slate-950">
                   {formatScore(item.awarded)} / {formatScore(item.question_maximum)}
                 </p>
                 <p className="text-xs text-slate-500">
-                  {formatScore(item.percentage)}% of rubric marks
+                  {item.label} contribution
                 </p>
               </div>
             </div>
@@ -736,24 +740,33 @@ function ScoreBreakdown({ breakdown }) {
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm">
                 <span>
                   <strong className="text-slate-900">{criterion.label}</strong>
-                  <span className="ml-2 text-xs text-slate-500">
-                    {criterion.mapped_skills.map(formatScoringLabel).join(", ")}
-                  </span>
                 </span>
                 <span className="shrink-0 font-semibold text-slate-900">
                   {formatScore(criterion.awarded)} / {formatScore(criterion.maximum)}
                 </span>
               </summary>
               <div className="mt-3 border-l-2 border-sky-200 pl-4 text-sm text-slate-700">
+                {criterion.mapped_skills.length > 0 && (
+                  <p className="mb-2 text-xs font-medium text-slate-500">
+                    This criterion contributes to{" "}
+                    {humanList(criterion.mapped_skills.map(formatScoringLabel))}.
+                  </p>
+                )}
                 {criterion.rubric?.matched_descriptor ? (
-                  <p className="leading-6">{criterion.rubric.matched_descriptor}</p>
+                  <p className="leading-6">
+                    Why this mark was awarded: {criterion.rubric.matched_descriptor}
+                  </p>
                 ) : (
                   <p className="leading-6 text-slate-500">
                     The evaluator awarded this criterion using the configured rubric.
                   </p>
                 )}
                 {criterion.rubric?.bands?.length > 0 && (
-                  <dl className="mt-3 space-y-2">
+                  <div className="mt-4">
+                    <p className="text-xs font-semibold uppercase text-slate-500">
+                      Rubric guide
+                    </p>
+                    <dl className="mt-2 space-y-2">
                     {criterion.rubric.bands.map((band) => (
                       <div key={`${criterion.name}-${band.score}`} className="flex gap-3">
                         <dt className="w-6 shrink-0 font-semibold text-slate-900">
@@ -762,7 +775,8 @@ function ScoreBreakdown({ breakdown }) {
                         <dd className="leading-5 text-slate-600">{band.description}</dd>
                       </div>
                     ))}
-                  </dl>
+                    </dl>
+                  </div>
                 )}
               </div>
             </details>
@@ -805,6 +819,12 @@ function formatScoringLabel(value) {
   return String(value || "")
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function humanList(values) {
+  if (values.length < 2) return values[0] || "";
+  if (values.length === 2) return `${values[0]} and ${values[1]}`;
+  return `${values.slice(0, -1).join(", ")}, and ${values.at(-1)}`;
 }
 
 function emptyFeedback() {
