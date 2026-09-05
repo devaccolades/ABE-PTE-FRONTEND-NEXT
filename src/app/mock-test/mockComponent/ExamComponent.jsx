@@ -626,6 +626,7 @@ function ScoreBreakdown({ breakdown }) {
   const combined = breakdown.combined || {};
   const skills = breakdown.skill_contributions || [];
   const criteria = breakdown.criteria || [];
+  const answerCalculation = breakdown.answer_calculation;
   const evaluationLabel =
     breakdown.evaluation_source === "ai"
       ? "This answer was checked by AI against the configured rubric."
@@ -680,6 +681,25 @@ function ScoreBreakdown({ breakdown }) {
           <p>
             A scoring gate was applied because the following criterion received
             zero: {breakdown.gate.triggered_by.map(formatScoringLabel).join(", ")}.
+          </p>
+        </div>
+      )}
+
+      {answerCalculation && (
+        <div className="border-l-4 border-sky-500 bg-sky-50 px-4 py-3">
+          <p className="text-sm font-semibold text-slate-900">Your answer share</p>
+          <p className="mt-1 text-sm leading-6 text-slate-700">
+            {formatScore(answerCalculation.correct_selected)} correct
+            {" - "}
+            {formatScore(answerCalculation.incorrect_selected)} incorrect
+            {" = "}
+            <strong>{formatScore(answerCalculation.raw_points)} raw points</strong>
+            {" out of "}
+            {formatScore(answerCalculation.maximum_raw_points)}.
+          </p>
+          <p className="mt-1 text-xs leading-5 text-slate-600">
+            Each incorrect selection deducts one correct-selection point. The raw
+            score cannot go below zero.
           </p>
         </div>
       )}
