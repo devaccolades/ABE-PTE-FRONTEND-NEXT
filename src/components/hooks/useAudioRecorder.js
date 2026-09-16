@@ -26,6 +26,7 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
   const capturePromiseRef = useRef(null);
   const resolveCaptureRef = useRef(null);
   const isStoppingRef = useRef(false);
+  const stopRequestedRef = useRef(false);
 
   const setAudioCapturePromise = useExamStore(
     (state) => state.setAudioCapturePromise,
@@ -36,6 +37,17 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
    */
   const startRecording = useCallback(async () => {
     isStoppingRef.current = false;
+    stopRequestedRef.current = false;
+    setError(null);
+
+    // Publish the promise before requesting permission so submission always has
+    // one authoritative capture to await, even while the browser prompt is open.
+    resolveCaptureRef.current?.(null);
+    capturePromiseRef.current = new Promise((resolve) => {
+      resolveCaptureRef.current = resolve;
+    });
+    setAudioCapturePromise(capturePromiseRef.current);
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
@@ -43,6 +55,8 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
 
       if (isStoppingRef.current) {
         stream.getTracks().forEach((track) => track.stop());
+        resolveCaptureRef.current?.(null);
+        resolveCaptureRef.current = null;
         return false;
       }
 
@@ -54,12 +68,6 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
 
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
-
-      capturePromiseRef.current = new Promise((resolve) => {
-        resolveCaptureRef.current = resolve;
-      });
-
-      setAudioCapturePromise(capturePromiseRef.current);
 
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) {
@@ -83,6 +91,11 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
 
         resolveCaptureRef.current?.(audioBlob);
         resolveCaptureRef.current = null;
+        stopRequestedRef.current = false;
+
+        if (mediaRecorderRef.current === recorder) {
+          mediaRecorderRef.current = null;
+        }
 
         if (streamRef.current) {
           streamRef.current.getTracks().forEach((track) => track.stop());
@@ -129,11 +142,15 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
       console.error("Mic access error:", err);
 
       setError("Microphone access denied or not found.");
+      resolveCaptureRef.current?.(null);
+      resolveCaptureRef.current = null;
+      stopRequestedRef.current = false;
+      mediaRecorderRef.current = null;
 
-      const failedCapture = Promise.resolve(null);
-
-      capturePromiseRef.current = failedCapture;
-      setAudioCapturePromise(failedCapture);
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
 
       return false;
     }
@@ -144,14 +161,33 @@ export const useAudioRecorder = (setAnswerKey, maxDuration) => {
    */
   const stopRecording = useCallback(() => {
     isStoppingRef.current = true;
+    const recorder = mediaRecorderRef.current;
 
-    if (
-      mediaRecorderRef.current &&
-      mediaRecorderRef.current.state !== "inactive"
-    ) {
-      mediaRecorderRef.current.stop();
+    if (recorder && recorder.state !== "inactive") {
+      if (!stopRequestedRef.current) {
+        stopRequestedRef.current = true;
+        try {
+          recorder.stop();
+        } catch (error) {
+          console.error("Could not stop audio recording:", error);
+          stopRequestedRef.current = false;
+          setError("The recording could not be finalized. Please try again.");
+          resolveCaptureRef.current?.(null);
+          resolveCaptureRef.current = null;
+          mediaRecorderRef.current = null;
+
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach((track) => track.stop());
+            streamRef.current = null;
+          }
+        }
+      }
+    } else if (recorder && stopRequestedRef.current) {
+      // MediaRecorder becomes inactive before its queued dataavailable/onstop
+      // events run. A repeated stop must keep waiting for that same result.
     } else {
-      // If the recorder was never started or is inactive, resolve the promise immediately with null
+      // The recorder never started (for example, permission was denied or the
+      // question was stopped during its beep/preparation phase).
       if (resolveCaptureRef.current) {
         resolveCaptureRef.current(null);
         resolveCaptureRef.current = null;
