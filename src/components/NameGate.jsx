@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useExamStore } from "@/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 export default function NameGate({ mocktestList }) {
   const [name, setName] = useState("");
   const [selectedTest, setSelectedTest] = useState(null);
+  const [availableTests, setAvailableTests] = useState(
+    Array.isArray(mocktestList) ? mocktestList : [],
+  );
+  const [testsLoading, setTestsLoading] = useState(true);
+  const [testsError, setTestsError] = useState("");
 
   const setSessionId = useExamStore((s) => s.setSessionId);
   const setMockTestId = useExamStore((s) => s.setMockTestId);
@@ -16,6 +21,42 @@ export default function NameGate({ mocktestList }) {
   const { setUserName } = useExamStore();
 
   const canContinue = name.trim().length >= 2 && selectedTest;
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadAvailableTests = async () => {
+      setTestsLoading(true);
+      setTestsError("");
+      try {
+        const response = await fetch(`${baseUrl}mocktest-list/`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error("Available question papers could not be loaded.");
+        }
+        const payload = await response.json();
+        const tests = Array.isArray(payload.data) ? payload.data : [];
+        setAvailableTests(tests);
+        setSelectedTest((current) =>
+          tests.some((test) => test.test_id === current) ? current : null,
+        );
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          setAvailableTests([]);
+          setTestsError(
+            error.message || "Available question papers could not be loaded.",
+          );
+        }
+      } finally {
+        if (!controller.signal.aborted) setTestsLoading(false);
+      }
+    };
+
+    loadAvailableTests();
+    return () => controller.abort();
+  }, [baseUrl]);
 
   // 🔹 Start exam
   const handleContinue = async () => {
@@ -64,8 +105,7 @@ export default function NameGate({ mocktestList }) {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {mocktestList &&
-            mocktestList.map((item) => (
+          {availableTests.map((item) => (
               <button
                 key={item.test_id}
                 className={`px-4 py-1 rounded border text-sm ${
@@ -79,6 +119,18 @@ export default function NameGate({ mocktestList }) {
               </button>
             ))}
         </div>
+
+        {testsLoading && (
+          <p className="text-sm text-gray-500">Loading question papers...</p>
+        )}
+        {!testsLoading && testsError && (
+          <p className="text-sm text-red-600">{testsError}</p>
+        )}
+        {!testsLoading && !testsError && availableTests.length === 0 && (
+          <p className="text-sm text-gray-500">
+            No question papers are currently available.
+          </p>
+        )}
 
         <Button
           className="w-full"
