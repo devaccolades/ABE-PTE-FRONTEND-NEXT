@@ -1,8 +1,8 @@
 import { create } from "zustand";
 
-export const MOCKTEST_BASE_URL = "https://admin.pte.abeedu.com/mocktest/";
-// export const MOCKTEST_BASE_URL = "https://admin.abepte.accoladesweb.com/mocktest/";
-// export const MOCKTEST_BASE_URL = "http://192.168.29.96:8000/mocktest/";
+// Set NEXT_PUBLIC_MOCKTEST_BASE_URL (e.g. in .env.local) to use another backend.
+export const MOCKTEST_BASE_URL =
+  process.env.NEXT_PUBLIC_MOCKTEST_BASE_URL || "https://admin.pte.abeedu.com/mocktest/";
 
 // Primary responsibility: Defines the global exam store (Zustand) and shared client-side API stubs.
 // Architecture role: Single source of truth for exam lifecycle state used across pages/components.
@@ -64,7 +64,6 @@ export const useExamStore = create((set, get) => ({
   remainingTime: 0,
   startExam: false,
   baseUrl: MOCKTEST_BASE_URL,
-  // baseUrl: "http://192.168.29.96:8000/mocktest/",
   // Current answer payload for the active question only (resets on question transitions).
   answer: {
     session_id: "",
