@@ -91,6 +91,8 @@ export default function ExamShell({ mocktestList }) {
   // Record exam start time in localStorage the first time startExam flips to true.
   useEffect(() => {
     if (startExam) {
+      // Lets a refresh return to the current question instead of the pre-exam checks.
+      localStorage.setItem("startExam", "true");
       if (!localStorage.getItem("exam_start_time")) {
         localStorage.setItem("exam_start_time", String(Date.now()));
       }
@@ -351,7 +353,7 @@ export default function ExamShell({ mocktestList }) {
         // Persist resume pointers so the candidate can refresh without losing their place.
         localStorage.setItem("current_question", targetUrl);
         localStorage.setItem("next_question", data.next);
-        localStorage.setItem("startExam", startExam);
+        localStorage.setItem("startExam", String(useExamStore.getState().startExam));
 
         const newSectionName = q.mocktest_section.section_name;
         const isWritingQuestion =
@@ -401,8 +403,11 @@ export default function ExamShell({ mocktestList }) {
           // If it's a refresh in the same section, we keep the persisted value.
           localStorage.setItem("exam_remaining_time", String(nextRemaining));
           localStorage.setItem("exam_remaining_time_section", newSectionName);
-          // Clear the local precise timer so the new question component picks up the new global time
-          localStorage.removeItem("section_time_left");
+          // Clear the local precise timer so the new question component picks up the new global time,
+          // except after a refresh in the same section, where it holds the time actually left.
+          if (!shouldUsePersisted) {
+            localStorage.removeItem("section_time_left");
+          }
         }
 
         // Ensure the outgoing answer payload contains stable metadata needed by the backend for submission.
