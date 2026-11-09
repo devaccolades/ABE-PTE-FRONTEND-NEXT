@@ -17,6 +17,12 @@ export default function TabGuard() {
      * @returns {void}
      */
     const handleExit = () => {
+      // Keep an unfinished exam so a refresh resumes it; ExamShell's heartbeat
+      // clears it when the tab was closed instead.
+      const examInProgress =
+        localStorage.getItem("exam_session_id") &&
+        localStorage.getItem("exam_completed") !== "true";
+      if (examInProgress) return;
       localStorage.clear();
       // Add your cache clearing logic here
     };

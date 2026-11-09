@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback, useRef } from "react";
+import toast, { Toaster } from "react-hot-toast";
 import { useExamStore } from "@/store";
 
 // Primary responsibility: Orchestrates the exam runtime (fetch current question, persist/rehydrate session, submit answers).
@@ -78,6 +79,8 @@ export default function ExamShell({ mocktestList }) {
   const [currentQuestion, setCurrentQuestion] = useState(null);
   const [loading, setLoading] = useState(true);
   const [callAreYouSure, setCallAreYouSure] = useState(false);
+  // Mirrors isSubmittingRef so the Next controls can show that an answer is still saving.
+  const [submitting, setSubmitting] = useState(false);
   const [rehydrated, setRehydrated] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [examCompleted, setExamCompleted] = useState(false);
@@ -88,6 +91,8 @@ export default function ExamShell({ mocktestList }) {
   // Record exam start time in localStorage the first time startExam flips to true.
   useEffect(() => {
     if (startExam) {
+      // Lets a refresh return to the current question instead of the pre-exam checks.
+      localStorage.setItem("startExam", "true");
       if (!localStorage.getItem("exam_start_time")) {
         localStorage.setItem("exam_start_time", String(Date.now()));
       }
@@ -338,6 +343,8 @@ export default function ExamShell({ mocktestList }) {
         setStopSignal(false);
         setPhase("prep");
         resetAnswer();
+        // A confirmation left open from the previous question must not submit this one.
+        setCallAreYouSure(false);
 
         setCurrentQuestion(q);
         setQuestionSection(q.mocktest_section.section_name);
@@ -346,7 +353,7 @@ export default function ExamShell({ mocktestList }) {
         // Persist resume pointers so the candidate can refresh without losing their place.
         localStorage.setItem("current_question", targetUrl);
         localStorage.setItem("next_question", data.next);
-        localStorage.setItem("startExam", startExam);
+        localStorage.setItem("startExam", String(useExamStore.getState().startExam));
 
         const newSectionName = q.mocktest_section.section_name;
         const isWritingQuestion =
@@ -396,8 +403,11 @@ export default function ExamShell({ mocktestList }) {
           // If it's a refresh in the same section, we keep the persisted value.
           localStorage.setItem("exam_remaining_time", String(nextRemaining));
           localStorage.setItem("exam_remaining_time_section", newSectionName);
-          // Clear the local precise timer so the new question component picks up the new global time
-          localStorage.removeItem("section_time_left");
+          // Clear the local precise timer so the new question component picks up the new global time,
+          // except after a refresh in the same section, where it holds the time actually left.
+          if (!shouldUsePersisted) {
+            localStorage.removeItem("section_time_left");
+          }
         }
 
         // Ensure the outgoing answer payload contains stable metadata needed by the backend for submission.
@@ -523,6 +533,7 @@ export default function ExamShell({ mocktestList }) {
     }
 
     isSubmittingRef.current = true;
+    setSubmitting(true);
 
     setCallAreYouSure(false);
 
@@ -535,6 +546,9 @@ export default function ExamShell({ mocktestList }) {
       setLoading(true);
     }
 
+    // A finished speaking question cannot record again, so one without usable audio is
+    // submitted as skipped (0 marks) instead of leaving the candidate unable to continue.
+    let skipReason = "";
     if (currentQuestion?.ai_input_type === "audio") {
       const capturePromise = useExamStore.getState().audioCapturePromise;
       console.log("capturePromise:", capturePromise);
@@ -549,16 +563,11 @@ export default function ExamShell({ mocktestList }) {
         ]);
       } catch (error) {
         console.error("Audio finalization failed:", error);
+        skipReason = "recording_timeout";
       }
 
-      if (!(audioBlob instanceof Blob) || audioBlob.size === 0) {
-        setLoading(false);
-        setStopSignal(false);
-        isSubmittingRef.current = false;
-        window.alert(
-          "Your recording could not be saved. Please check microphone access and record this answer again.",
-        );
-        return;
+      if (!skipReason && !(audioBlob instanceof Blob && audioBlob.size > 0)) {
+        skipReason = audioBlob instanceof Blob ? "empty_recording" : "no_recording";
       }
     }
 
@@ -568,7 +577,10 @@ export default function ExamShell({ mocktestList }) {
     formData.append("session_id", sessionId);
     formData.append("question_name", finalAnswer.question_name);
 
-    if (finalAnswer.answer_audio instanceof Blob) {
+    if (skipReason) {
+      formData.append("skipped", "true");
+      formData.append("skip_reason", skipReason);
+    } else if (finalAnswer.answer_audio instanceof Blob) {
       formData.append("answer_audio", finalAnswer.answer_audio, "answer.webm");
     }
 
@@ -621,6 +633,14 @@ export default function ExamShell({ mocktestList }) {
       setStopSignal(false);
       resetAnswer();
 
+      // A timed-out section skips its unrecorded question as expected; anything else is a capture failure.
+      if (submission.skipped && !isTimeExpired) {
+        toast.error(
+          "Your last answer couldn't be recorded, so it was skipped. Please check your microphone.",
+          { duration: 8000 },
+        );
+      }
+
       if (isTimeExpired) {
         // console.log("Section timer expired");
         // Timer expiry path: backend may require a special jump to the correct next question for the next section.
@@ -659,6 +679,7 @@ export default function ExamShell({ mocktestList }) {
     } finally {
       // Release submission lock after success/failure to allow the candidate to retry or proceed.
       isSubmittingRef.current = false;
+      setSubmitting(false);
     }
   };
 
@@ -690,8 +711,12 @@ export default function ExamShell({ mocktestList }) {
   if (examCompleted) return <ExamCompleteScreen userName={userName} timeSpent={timeSpent} />;
   if (!currentQuestion) return <ExamLoadingSkeleton />;
 
+  // Next stays disabled while an answer saves, so a confirmation cannot carry over to the next question.
+  const nextDisabled = phase === "prep" || submitting;
+
   return (
     <>
+      <Toaster position="top-center" />
       <Card className="w-full max-w-5xl mx-auto shadow-lg border-none md:border sm:rounded-xl rounded-none my-8 ">
         {/* Header: Adjusted padding and text size for mobile */}
         <CardHeader className="bg-slate-50 p-4 md:p-5">
@@ -725,15 +750,15 @@ export default function ExamShell({ mocktestList }) {
           {/* Footer: Full-width button on mobile for better thumb reach */}
           <div className="mt-6 pt-4 border-t flex justify-end">
             <button
-              disabled={phase === "prep"}
+              disabled={nextDisabled}
               onClick={() => setCallAreYouSure(true)}
               className={`w-full sm:w-auto px-10 py-3 md:py-2 rounded-lg md:rounded-md font-bold transition-all text-base md:text-sm ${
-                phase === "prep"
+                nextDisabled
                   ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                   : "bg-sky-600 text-white hover:bg-sky-700 shadow-md active:scale-95"
               }`}
             >
-              Next
+              {submitting ? "Saving..." : "Next"}
             </button>
           </div>
         </CardContent>
@@ -743,6 +768,7 @@ export default function ExamShell({ mocktestList }) {
         <AreyousureModal
           onClose={() => setCallAreYouSure(false)}
           onNext={handleModalNext}
+          isLoading={submitting}
         />
       )}
     </>

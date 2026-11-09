@@ -91,5 +91,4 @@ export const mocktestStore = create((set) => ({
     })),
 
   baseUrl: MOCKTEST_BASE_URL,
-  // baseUrl: "https://admin.abepte.accoladesweb.com/mocktest/",
 }));
