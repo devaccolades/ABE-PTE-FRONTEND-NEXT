@@ -52,10 +52,9 @@ export default function SummarizeTheText({
     // return 1000;
   }, [subsection]);
 
-  const getWordCount = (text) => {
-    const trimmed = text.trim();
-    return trimmed === "" ? 0 : trimmed.split(/\s+/).length;
-  };
+  // Counts like the backend: a lone punctuation mark (e.g. "word .") is not a word.
+  const getWordCount = (text) =>
+    text.split(/\s+/).filter((token) => /[\p{L}\p{N}]/u.test(token)).length;
 
   const currentCount = getWordCount(userInput);
 
